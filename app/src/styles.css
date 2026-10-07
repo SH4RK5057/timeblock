@@ -195,3 +195,8 @@ button.huge { width: 100%; padding: 20px; font-size: 22px; border-radius: 12px; 
 .alarm { z-index: 50; }
 .alarm .modal { text-align: center; }
 .alarm .huge { margin-bottom: 8px; }
+
+.newact { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.newact input:first-child { flex: 1; min-width: 140px; }
+.newact input[type=color] { width: 38px; padding: 2px; }
+button.link.left { justify-self: start; }

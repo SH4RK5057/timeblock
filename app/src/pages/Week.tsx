@@ -532,8 +532,33 @@ function BlockEditor({
   onDelete?: () => void
   defaultMinutes: (activityId: string | null, taskId: string | null) => number
 }) {
-  const { activities, tasks } = useData()
+  const { uid, activities, tasks } = useData()
   const [d, setD] = useState(draft)
+  const [creating, setCreating] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newColor, setNewColor] = useState('#4f7cff')
+  const [newMins, setNewMins] = useState('')
+
+  const createActivity = async () => {
+    if (!newName.trim()) return
+    const mins = newMins ? Number(newMins) : null
+    const created = await addItem(uid, 'activities', {
+      name: newName.trim(),
+      color: newColor,
+      notes: '',
+      defaultMinutes: mins,
+      blockedSites: [],
+      locationIds: [],
+      materialIds: [],
+      archived: false,
+    })
+    const p: Partial<Draft> = { activityId: created.id }
+    if (isNew && mins) p.endAt = addMinutes(d.startAt, mins)
+    setD((x) => ({ ...x, ...p }))
+    setCreating(false)
+    setNewName('')
+    setNewMins('')
+  }
   const [sites, setSites] = useState(draft.blockedSites.join(', '))
   const isNew = draft.id === null
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }))
@@ -569,6 +594,31 @@ function BlockEditor({
               ))}
           </select>
         </label>
+        {creating ? (
+          <div className="newact">
+            <input autoFocus placeholder="New activity name" value={newName} onChange={(e) => setNewName(e.target.value)} />
+            <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} aria-label="Color" />
+            <input
+              type="number"
+              min={5}
+              step={5}
+              className="narrow"
+              placeholder="min"
+              value={newMins}
+              onChange={(e) => setNewMins(e.target.value)}
+            />
+            <button type="button" className="primary" onClick={createActivity} disabled={!newName.trim()}>
+              Add
+            </button>
+            <button type="button" className="link" onClick={() => setCreating(false)}>
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="link left" onClick={() => setCreating(true)}>
+            + New activity
+          </button>
+        )}
         <label>
           Task
           <select
