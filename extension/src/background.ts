@@ -72,6 +72,7 @@ async function recompute() {
     appUrl: APP_URL,
   }
   await chrome.storage.local.set({ state })
+  await scheduleBlockAlarms()
 
   // One redirect rule per domain; requestDomains also matches subdomains.
   const existing = await chrome.declarativeNetRequest.getDynamicRules()
@@ -132,9 +133,68 @@ onAuthStateChanged(auth, (u) => {
 
 // MV3 workers sleep, and block boundaries change the answer without any data change.
 chrome.alarms.create('tick', { periodInMinutes: 1 })
-chrome.alarms.onAlarm.addListener(() => recompute())
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name.startsWith('blk:')) void fireBlockAlert(a.name.split(':')[1])
+  else void recompute()
+})
 chrome.runtime.onStartup.addListener(() => recompute())
 chrome.runtime.onInstalled.addListener(() => recompute())
+
+// ---- Block start alerts ----
+const alertMode = (b: Block) => (b.alert === 'default' ? settings.notify.mode : b.alert)
+
+/** One chrome.alarms entry per upcoming block, so alerts survive the service worker sleeping. */
+async function scheduleBlockAlarms() {
+  const wanted = new Map<string, number>()
+  if (user) {
+    const lead = settings.notify.leadMinutes * 60_000
+    for (const b of blocks) {
+      const mode = alertMode(b)
+      const when = b.startAt.getTime() - lead
+      if ((mode === 'notify' || mode === 'alarm') && when > Date.now()) wanted.set(`blk:${b.id}:${b.startAt.getTime()}`, when)
+    }
+  }
+  const existing = await chrome.alarms.getAll()
+  for (const a of existing) if (a.name.startsWith('blk:') && !wanted.has(a.name)) await chrome.alarms.clear(a.name)
+  for (const [name, when] of wanted) if (!existing.some((a) => a.name === name)) chrome.alarms.create(name, { when })
+}
+
+async function fireBlockAlert(blockId: string) {
+  const b = blocks.find((x) => x.id === blockId)
+  if (!b) return
+  const mode = alertMode(b)
+  if (mode !== 'notify' && mode !== 'alarm') return
+  const act = activities.find((a) => a.id === b.activityId)
+  const name = b.title || act?.name || 'Time block'
+  const when = settings.notify.leadMinutes ? `Starts at ${b.startAt.toLocaleTimeString([], { timeStyle: 'short' })}` : 'Starting now'
+  chrome.notifications.create(`blk-${b.id}`, {
+    type: 'basic',
+    iconUrl: 'icon.png',
+    title: name,
+    message: b.details ? `${when}. ${b.details}` : when,
+    requireInteraction: mode === 'alarm',
+    priority: 2,
+  })
+  if (mode === 'alarm') {
+    if (!(await chrome.offscreen.hasDocument())) {
+      await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: [chrome.offscreen.Reason.AUDIO_PLAYBACK],
+        justification: 'Play the block-start alarm sound',
+      })
+    }
+    chrome.runtime.sendMessage({ target: 'offscreen', type: 'play-alarm' })
+  }
+}
+
+function stopAlarm() {
+  chrome.runtime.sendMessage({ target: 'offscreen', type: 'stop' }).catch(() => {})
+}
+chrome.notifications.onClosed.addListener(stopAlarm)
+chrome.notifications.onClicked.addListener((id) => {
+  stopAlarm()
+  chrome.notifications.clear(id)
+})
 
 async function startSession(blockId: string | null) {
   if (!user) return

@@ -8,6 +8,7 @@ import Todo from './pages/Todo'
 import Library from './pages/Library'
 import Review from './pages/Review'
 import StatusBar from './components/StatusBar'
+import AlertManager from './components/AlertManager'
 
 const isMobile = () => window.matchMedia('(max-width: 720px)').matches
 
@@ -28,6 +29,7 @@ function Shell() {
         </button>
       </nav>
       {ready && <StatusBar />}
+      {ready && <AlertManager />}
       <main className="main">
         {!ready ? (
           <p className="muted">Loading…</p>

@@ -37,6 +37,8 @@ export interface Task {
   doneAt: Date | null
 }
 
+export type AlertMode = 'default' | 'notify' | 'alarm' | 'none'
+
 export interface Block {
   id: string
   startAt: Date
@@ -46,6 +48,8 @@ export interface Block {
   title: string | null
   details: string
   blockedSites: string[]
+  /** How to alert at start; 'default' follows settings.notify.mode. */
+  alert: AlertMode
 }
 
 export interface Session {
@@ -63,6 +67,7 @@ export interface Settings {
   globalBlockedSites: string[]
   visibleHours: { start: number; end: number }
   lastPicker: { locationId: string | null; materialIds: string[] }
+  notify: { mode: 'off' | 'notify' | 'alarm'; leadMinutes: number }
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -70,4 +75,5 @@ export const DEFAULT_SETTINGS: Settings = {
   globalBlockedSites: [],
   visibleHours: { start: 6, end: 23 },
   lastPicker: { locationId: null, materialIds: [] },
+  notify: { mode: 'off', leadMinutes: 0 },
 }

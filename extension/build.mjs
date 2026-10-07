@@ -14,7 +14,7 @@ const def = (k, fallback = '') => JSON.stringify(env[k] ?? fallback)
 rmSync('dist', { recursive: true, force: true })
 mkdirSync('dist', { recursive: true })
 await build({
-  entryPoints: { background: 'src/background.ts', popup: 'src/popup.ts', blocked: 'src/blocked.ts' },
+  entryPoints: { background: 'src/background.ts', popup: 'src/popup.ts', blocked: 'src/blocked.ts', offscreen: 'src/offscreen.ts' },
   outdir: 'dist',
   bundle: true,
   format: 'esm',

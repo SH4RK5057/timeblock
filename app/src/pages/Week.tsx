@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEven
 import { useSearchParams } from 'react-router-dom'
 import { addDays, addMinutes, format, isSameDay, startOfDay } from 'date-fns'
 import { writeBatch, doc, collection } from 'firebase/firestore'
-import { minutesBetween, snapToSlot, usuallyTakes, SLOT_MINUTES, weekStart, type Block } from '@timeblock/shared'
+import { type AlertMode, minutesBetween, snapToSlot, usuallyTakes, SLOT_MINUTES, weekStart, type Block } from '@timeblock/shared'
 import { useData } from '../data'
 import { addItem, patchItem, removeItem } from '../actions'
 import { db } from '../firebase'
@@ -33,6 +33,7 @@ interface Draft {
   title: string
   details: string
   blockedSites: string[]
+  alert: AlertMode
 }
 
 type Drag = {
@@ -106,7 +107,7 @@ export default function Week() {
         taskId: t.id,
         title: '',
         details: '',
-        blockedSites: [],
+        blockedSites: [], alert: 'default',
       })
     }
     setParams({}, { replace: true })
@@ -177,7 +178,7 @@ export default function Week() {
         taskId: null,
         title: '',
         details: '',
-        blockedSites: [],
+        blockedSites: [], alert: 'default',
       })
       return
     }
@@ -197,6 +198,7 @@ export default function Week() {
       title: b.title ?? '',
       details: b.details,
       blockedSites: b.blockedSites,
+      alert: b.alert,
     })
 
   /** Touch: tap an empty slot to create a 1h block. */
@@ -214,7 +216,7 @@ export default function Week() {
       taskId: null,
       title: '',
       details: '',
-      blockedSites: [],
+      blockedSites: [], alert: 'default',
     })
     void day
   }
@@ -253,6 +255,7 @@ export default function Week() {
         title: b.title,
         details: b.details,
         blockedSites: b.blockedSites,
+        alert: b.alert,
       })
     }
     await batch.commit()
@@ -265,7 +268,7 @@ export default function Week() {
 
   function newBlockNow() {
     const s = isSameDay(anchor, now) ? snapToSlot(now, 'floor') : addMinutes(anchor, Math.max(hStart, 9) * 60)
-    setDraft({ id: null, startAt: s, endAt: addMinutes(s, 60), activityId: null, taskId: null, title: '', details: '', blockedSites: [] })
+    setDraft({ id: null, startAt: s, endAt: addMinutes(s, 60), activityId: null, taskId: null, title: '', details: '', blockedSites: [], alert: 'default' })
   }
 
   // Keep "now" in view: on load, on Today, and when switching views.
@@ -496,6 +499,7 @@ export default function Week() {
               title: d.title.trim() || null,
               details: d.details,
               blockedSites: d.blockedSites,
+              alert: d.alert,
             }
             if (d.id) await patchItem(uid, 'blocks', d.id, data)
             else await addItem(uid, 'blocks', data)
@@ -615,6 +619,15 @@ function BlockEditor({
         <label>
           Extra blocked sites
           <input value={sites} onChange={(e) => setSites(e.target.value)} placeholder="reddit.com" />
+        </label>
+        <label>
+          Alert at start
+          <select value={d.alert} onChange={(e) => set({ alert: e.target.value as AlertMode })}>
+            <option value="default">Use my default</option>
+            <option value="notify">Notification</option>
+            <option value="alarm">Alarm (plays a sound)</option>
+            <option value="none">No alert</option>
+          </select>
         </label>
         {!valid && <p className="muted small">Pick an activity or task, or enter a title; end must be after start.</p>}
         <div className="row">

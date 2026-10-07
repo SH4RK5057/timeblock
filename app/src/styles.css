@@ -191,3 +191,7 @@ button.huge { width: 100%; padding: 20px; font-size: 22px; border-radius: 12px; 
 .center-text { text-align: center; }
 .block.overlap { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.18) 0 6px, transparent 6px 12px); border: 1px dashed rgba(255,255,255,.8); }
 @media (max-width: 720px) { .status { top: 0; } }
+
+.alarm { z-index: 50; }
+.alarm .modal { text-align: center; }
+.alarm .huge { margin-bottom: 8px; }

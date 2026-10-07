@@ -58,6 +58,7 @@ export const fromBlock = (id: string, d: Raw): Block => {
     title: r.title ?? null,
     details: r.details ?? '',
     blockedSites: r.blockedSites ?? [],
+    alert: r.alert ?? 'default',
   }
 }
 
@@ -77,4 +78,5 @@ export const fromSession = (id: string, d: Raw): Session => {
 export const fromSettings = (d: Raw | undefined): Settings => ({
   ...DEFAULT_SETTINGS,
   ...(d ?? {}),
+  notify: { ...DEFAULT_SETTINGS.notify, ...(d?.notify ?? {}) },
 })

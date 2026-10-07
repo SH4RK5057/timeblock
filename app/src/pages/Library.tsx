@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import type { Activity, Context, ContextKind } from '@timeblock/shared'
 import { useData } from '../data'
 import { useAuth } from '../auth'
+import { notificationsSupported, requestPermission, showNotification, startAlarmSound, stopAlarmSound, unlockAudio } from '../alerts'
 import { addItem, patchItem, removeItem, saveSettings } from '../actions'
 import { splitList } from '../util'
 import Modal from '../components/Modal'
@@ -167,6 +168,56 @@ export default function Library() {
           <button className="primary">Save</button>
         </form>
         <p className="muted small">Used by the browser extension (phase 3).</p>
+      </section>
+
+      <section>
+        <h3>Block start alerts</h3>
+        <div className="quickadd">
+          <label className="small muted">
+            Default{' '}
+            <select
+              value={settings.notify.mode}
+              onChange={async (e) => {
+                const mode = e.target.value as typeof settings.notify.mode
+                if (mode !== 'off') await requestPermission()
+                saveSettings(uid, { notify: { ...settings.notify, mode } })
+              }}
+            >
+              <option value="off">Off</option>
+              <option value="notify">Notification</option>
+              <option value="alarm">Alarm (plays a sound)</option>
+            </select>
+          </label>
+          <label className="small muted">
+            When{' '}
+            <select
+              value={settings.notify.leadMinutes}
+              onChange={(e) => saveSettings(uid, { notify: { ...settings.notify, leadMinutes: Number(e.target.value) } })}
+            >
+              <option value={0}>At start</option>
+              <option value={5}>5 min before</option>
+              <option value={10}>10 min before</option>
+              <option value={15}>15 min before</option>
+            </select>
+          </label>
+          <button
+            onClick={async () => {
+              unlockAudio()
+              await requestPermission()
+              await showNotification('Timeblock test', 'Notifications work.', 'test', false)
+              startAlarmSound()
+              setTimeout(stopAlarmSound, 2500)
+            }}
+          >
+            Test
+          </button>
+        </div>
+        <p className="muted small">
+          Each block can override this when you edit it. Alerts fire while Timeblock is open (a tab or the installed app)
+          {notificationsSupported() && Notification.permission === 'denied' ? ', but notifications are blocked in your browser settings.' : '.'}
+          {' '}Alarms need you to have clicked something on this page at least once so the browser allows sound. The Chrome
+          extension also alerts, even when the Timeblock page is closed.
+        </p>
       </section>
 
       <section>
