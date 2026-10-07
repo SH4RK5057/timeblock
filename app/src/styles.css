@@ -200,3 +200,5 @@ button.huge { width: 100%; padding: 20px; font-size: 22px; border-radius: 12px; 
 .newact input:first-child { flex: 1; min-width: 140px; }
 .newact input[type=color] { width: 38px; padding: 2px; }
 button.link.left { justify-self: start; }
+
+.search { width: 100%; margin-bottom: 6px; padding: 8px 10px; }

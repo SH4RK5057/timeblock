@@ -13,6 +13,7 @@ import {
   runTransaction,
   updateDoc,
   where,
+  type DocumentReference,
   type Unsubscribe,
 } from 'firebase/firestore'
 import { startOfDay } from 'date-fns'
@@ -21,6 +22,8 @@ import {
   fromBlock,
   fromSession,
   fromSettings,
+  MIN_SESSION_MINUTES,
+  pushMinutes,
   resolveBlocklist,
   type Activity,
   type Block,
@@ -196,6 +199,40 @@ chrome.notifications.onClicked.addListener((id) => {
   chrome.notifications.clear(id)
 })
 
+type Tx = Parameters<Parameters<typeof runTransaction>[1]>[0]
+interface Running {
+  ref: DocumentReference
+  actRef: DocumentReference | null
+  recent: number[]
+  minutes: number
+}
+
+async function readRunning(tx: Tx, uid: string, now: Date): Promise<Running | null> {
+  const s = await tx.get(doc(db, `users/${uid}/meta/settings`))
+  const runId = s.data()?.runningSessionId as string | null | undefined
+  if (!runId) return null
+  const ref = doc(db, `users/${uid}/sessions/${runId}`)
+  const rs = await tx.get(ref)
+  if (!rs.exists() || rs.data().endedAt) return null
+  const d = rs.data()
+  let actRef: DocumentReference | null = null
+  let recent: number[] = []
+  if (d.activityId) {
+    const r = doc(db, `users/${uid}/activities/${d.activityId}`)
+    const as = await tx.get(r)
+    if (as.exists()) {
+      actRef = r
+      recent = as.data().recentMinutes ?? []
+    }
+  }
+  return { ref, actRef, recent, minutes: Math.round((now.getTime() - d.startedAt.toDate().getTime()) / 60000) }
+}
+
+function writeEnd(tx: Tx, r: Running, now: Date) {
+  tx.update(r.ref, { endedAt: now })
+  if (r.actRef && r.minutes >= MIN_SESSION_MINUTES) tx.update(r.actRef, { recentMinutes: pushMinutes(r.recent, r.minutes) })
+}
+
 async function startSession(blockId: string | null) {
   if (!user) return
   const uid = user.uid
@@ -204,13 +241,8 @@ async function startSession(blockId: string | null) {
   const block = blocks.find((b) => b.id === blockId) ?? null
   const now = new Date()
   await runTransaction(db, async (tx) => {
-    const s = await tx.get(settingsRef)
-    const runId = s.data()?.runningSessionId as string | undefined
-    if (runId) {
-      const rr = doc(db, `users/${uid}/sessions/${runId}`)
-      const rs = await tx.get(rr)
-      if (rs.exists() && !rs.data().endedAt) tx.update(rr, { endedAt: now })
-    }
+    const running = await readRunning(tx, uid, now)
+    if (running) writeEnd(tx, running, now)
     tx.set(newRef, {
       blockId: block?.id ?? null,
       activityId: block?.activityId ?? null,
@@ -229,12 +261,8 @@ async function endSession() {
   const settingsRef = doc(db, `users/${uid}/meta/settings`)
   const now = new Date()
   await runTransaction(db, async (tx) => {
-    const s = await tx.get(settingsRef)
-    const runId = s.data()?.runningSessionId as string | undefined
-    if (!runId) return
-    const rr = doc(db, `users/${uid}/sessions/${runId}`)
-    const rs = await tx.get(rr)
-    if (rs.exists() && !rs.data().endedAt) tx.update(rr, { endedAt: now })
+    const running = await readRunning(tx, uid, now)
+    if (running) writeEnd(tx, running, now)
     tx.set(settingsRef, { runningSessionId: null }, { merge: true })
   })
 }

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
+import Modal from '../components/Modal'
 import { dueFromDate, taskGroup, type Task, type TaskGroup } from '@timeblock/shared'
 import { useData } from '../data'
 import { addItem, patchItem, removeItem } from '../actions'
@@ -23,6 +24,7 @@ export default function Todo() {
   const [estimate, setEstimate] = useState('')
   const [showDone, setShowDone] = useState(false)
   const [more, setMore] = useState(false)
+  const [editing, setEditing] = useState<Task | null>(null)
 
   const add = async (e: FormEvent) => {
     e.preventDefault()
@@ -72,6 +74,9 @@ export default function Todo() {
           {t.estimateMinutes ? ` · ${t.estimateMinutes}m` : ''}
         </div>
       </div>
+      <button className="link" onClick={() => setEditing(t)}>
+        Edit
+      </button>
       {!t.doneAt && (
         <button className="link" onClick={() => nav(`/week?task=${t.id}`)}>
           Schedule
@@ -144,6 +149,84 @@ export default function Todo() {
           {showDone && <ul className="list">{done.map(row)}</ul>}
         </section>
       )}
+      {editing && <TaskEditor task={editing} onClose={() => setEditing(null)} />}
     </div>
+  )
+}
+
+function TaskEditor({ task, onClose }: { task: Task; onClose: () => void }) {
+  const { uid, activities } = useData()
+  const [title, setTitle] = useState(task.title)
+  const [notes, setNotes] = useState(task.notes)
+  const [date, setDate] = useState(task.dueAt ? format(task.dueAt, 'yyyy-MM-dd') : '')
+  const [time, setTime] = useState(task.dueAt && format(task.dueAt, 'HH:mm') !== '23:59' ? format(task.dueAt, 'HH:mm') : '')
+  const [activityId, setActivityId] = useState(task.activityId ?? '')
+  const [estimate, setEstimate] = useState(task.estimateMinutes?.toString() ?? '')
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!title.trim()) return
+    let dueAt: Date | null = null
+    if (date) {
+      const day = new Date(date + 'T00:00')
+      if (time) {
+        const [h, m] = time.split(':').map(Number)
+        dueAt = new Date(day)
+        dueAt.setHours(h, m, 0, 0)
+      } else dueAt = dueFromDate(day)
+    }
+    await patchItem(uid, 'tasks', task.id, {
+      title: title.trim(),
+      notes,
+      dueAt,
+      activityId: activityId || null,
+      estimateMinutes: estimate ? Number(estimate) : null,
+    })
+    onClose()
+  }
+
+  return (
+    <Modal title="Edit task" onClose={onClose}>
+      <form className="form" onSubmit={save}>
+        <label>
+          Title
+          <input required value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <div className="row">
+          <label>
+            Due date
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </label>
+          <label>
+            Time (optional)
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={!date} />
+          </label>
+        </div>
+        <div className="row">
+          <label>
+            Activity
+            <select value={activityId} onChange={(e) => setActivityId(e.target.value)}>
+              <option value="">No activity</option>
+              {activities
+                .filter((a) => !a.archived || a.id === activityId)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label>
+            Estimate (min)
+            <input type="number" min={5} step={5} value={estimate} onChange={(e) => setEstimate(e.target.value)} />
+          </label>
+        </div>
+        <label>
+          Notes
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </label>
+        <button className="primary">Save</button>
+      </form>
+    </Modal>
   )
 }

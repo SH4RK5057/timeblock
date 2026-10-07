@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
-import type { Activity, Context, ContextKind } from '@timeblock/shared'
+import { usuallyTakes, type Activity, type Context, type ContextKind } from '@timeblock/shared'
 import { useData } from '../data'
 import { useAuth } from '../auth'
 import { notificationsSupported, requestPermission, showNotification, startAlarmSound, stopAlarmSound, unlockAudio } from '../alerts'
-import { addItem, patchItem, removeItem, saveSettings } from '../actions'
+import { addItem, patchItem, pruneHistory, saveSettings } from '../actions'
 import { splitList } from '../util'
 import Modal from '../components/Modal'
 
@@ -12,7 +12,6 @@ function ActivityForm({ initial, onDone }: { initial?: Activity; onDone: () => v
   const [name, setName] = useState(initial?.name ?? '')
   const [color, setColor] = useState(initial?.color ?? '#4f7cff')
   const [notes, setNotes] = useState(initial?.notes ?? '')
-  const [mins, setMins] = useState(initial?.defaultMinutes?.toString() ?? '')
   const [sites, setSites] = useState((initial?.blockedSites ?? []).join(', '))
   const [locs, setLocs] = useState<string[]>(initial?.locationIds ?? [])
   const [mats, setMats] = useState<string[]>(initial?.materialIds ?? [])
@@ -26,13 +25,12 @@ function ActivityForm({ initial, onDone }: { initial?: Activity; onDone: () => v
       name: name.trim(),
       color,
       notes,
-      defaultMinutes: mins ? Number(mins) : null,
       blockedSites: splitList(sites),
       locationIds: locs,
       materialIds: mats,
     }
     if (initial) await patchItem(uid, 'activities', initial.id, data)
-    else await addItem(uid, 'activities', { ...data, archived: false })
+    else await addItem(uid, 'activities', { ...data, recentMinutes: [], archived: false })
     onDone()
   }
 
@@ -57,10 +55,11 @@ function ActivityForm({ initial, onDone }: { initial?: Activity; onDone: () => v
           Color
           <input type="color" value={color} onChange={(e) => setColor(e.target.value)} />
         </label>
-        <label>
-          Usually takes (min)
-          <input type="number" min={5} step={5} value={mins} onChange={(e) => setMins(e.target.value)} />
-        </label>
+        {initial && (
+          <div className="muted small">
+            Usually takes: {usuallyTakes(initial) ? `${usuallyTakes(initial)} min (learned)` : 'still learning (needs 3 sessions)'}
+          </div>
+        )}
       </div>
       <label>
         Notes
@@ -90,6 +89,9 @@ export default function Library() {
   const [ctxKind, setCtxKind] = useState<ContextKind>('location')
   const { signOut } = useAuth()
   const [globalSites, setGlobalSites] = useState<string | null>(null)
+  const [q, setQ] = useState('')
+  const match = (name: string) => name.toLowerCase().includes(q.trim().toLowerCase())
+  const [pruneMsg, setPruneMsg] = useState('')
 
   const addCtx = async (e: FormEvent) => {
     e.preventDefault()
@@ -111,17 +113,24 @@ export default function Library() {
 
   return (
     <div className="library">
+      <input
+        type="search"
+        className="search"
+        placeholder="Search activities, locations, materials…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
       <section>
         <h3>
           Activities <button className="link" onClick={() => setEditing('new')}>+ New</button>
         </h3>
         <ul className="list">
-          {activities.map((a) => (
+          {activities.filter((a) => match(a.name)).map((a) => (
             <li key={a.id} className={a.archived ? 'archived' : ''}>
               <span className="dot" style={{ background: a.color }} />
               <span className="grow">
                 {a.name}
-                {a.defaultMinutes ? <span className="muted small"> · {a.defaultMinutes}m</span> : null}
+                {usuallyTakes(a) ? <span className="muted small"> · usually {usuallyTakes(a)}m</span> : null}
               </span>
               <button className="link" onClick={() => setEditing(a)}>
                 Edit
@@ -137,9 +146,9 @@ export default function Library() {
 
       <section>
         <h3>Locations</h3>
-        <ul className="list">{contexts.filter((c) => c.kind === 'location').map(ctxRow)}</ul>
+        <ul className="list">{contexts.filter((c) => c.kind === 'location' && match(c.name)).map(ctxRow)}</ul>
         <h3>Materials</h3>
-        <ul className="list">{contexts.filter((c) => c.kind === 'material').map(ctxRow)}</ul>
+        <ul className="list">{contexts.filter((c) => c.kind === 'material' && match(c.name)).map(ctxRow)}</ul>
         <form className="quickadd" onSubmit={addCtx}>
           <select value={ctxKind} onChange={(e) => setCtxKind(e.target.value as ContextKind)}>
             <option value="location">Location</option>
@@ -234,6 +243,25 @@ export default function Library() {
           <li>Open chrome://extensions and turn on Developer mode.</li>
           <li>Click Load unpacked and choose the unzipped folder.</li>
         </ol>
+      </section>
+
+      <section>
+        <h3>Storage</h3>
+        <p className="muted small">
+          Timeblock only loads the last 60 days of blocks and sessions, and learns "usually takes" from 10 numbers per
+          activity. Deleting older history frees space and does not change what it has learned.
+        </p>
+        <button
+          onClick={async () => {
+            if (!confirm('Delete all sessions and blocks older than 90 days? This cannot be undone.')) return
+            setPruneMsg('Deleting…')
+            const n = await pruneHistory(uid, 90)
+            setPruneMsg(`Deleted ${n} old item${n === 1 ? '' : 's'}.`)
+          }}
+        >
+          Delete history older than 90 days
+        </button>{' '}
+        <span className="muted small">{pruneMsg}</span>
       </section>
 
       <section>

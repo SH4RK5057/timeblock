@@ -20,7 +20,7 @@ export default function Picker() {
 
   const taskMeta = (t: Task) => {
     const a = activities.find((x) => x.id === t.activityId)
-    const mins = t.estimateMinutes ?? usuallyTakes(a, sessions)
+    const mins = t.estimateMinutes ?? usuallyTakes(a)
     return [t.dueAt && `due ${format(t.dueAt, 'EEE MMM d, p')}`, mins && `~${mins}m`].filter(Boolean).join(' · ')
   }
 
@@ -91,7 +91,7 @@ export default function Picker() {
                 <span className="grow">
                   <div>{g.activity.name}</div>
                   <div className="small muted">
-                    {[usuallyTakes(g.activity, sessions) && `usually ${usuallyTakes(g.activity, sessions)}m`, g.uses && `${g.uses}× lately`]
+                    {[usuallyTakes(g.activity) && `usually ${usuallyTakes(g.activity)}m`, g.uses && `${g.uses}× lately`]
                       .filter(Boolean)
                       .join(' · ')}
                   </div>

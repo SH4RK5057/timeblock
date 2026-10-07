@@ -27,7 +27,7 @@ export const fromActivity = (id: string, d: Raw): Activity => {
     locationIds: r.locationIds ?? [],
     materialIds: r.materialIds ?? [],
     blockedSites: r.blockedSites ?? [],
-    defaultMinutes: r.defaultMinutes ?? null,
+    recentMinutes: r.recentMinutes ?? [],
     archived: !!r.archived,
   }
 }

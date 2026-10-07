@@ -1,21 +1,19 @@
 import type { Activity, Session, Task } from './types'
-import { isDueSoon, minutesBetween, roundMinutesTo15 } from './time'
+import { isDueSoon, roundMinutesTo15 } from './time'
 
-const MIN_SESSION_MINUTES = 5
+export const MIN_SESSION_MINUTES = 5
 const SAMPLE = 10
 const MIN_SAMPLES = 3
 
-/** Median of the last 10 completed sessions (ignoring <5 min), rounded to 15; default until 3 exist. */
-export function usuallyTakes(activity: Activity | undefined, sessions: Session[]): number | null {
-  if (!activity) return null
-  const mins = sessions
-    .filter((s) => s.activityId === activity.id && s.endedAt)
-    .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
-    .map((s) => minutesBetween(s.startedAt, s.endedAt!))
-    .filter((m) => m >= MIN_SESSION_MINUTES)
-    .slice(0, SAMPLE)
-  if (mins.length < MIN_SAMPLES) return activity.defaultMinutes
-  mins.sort((a, b) => a - b)
+/** Keeps only the last 10 durations so learning costs ~10 numbers per activity. */
+export function pushMinutes(prev: number[] | undefined, minutes: number): number[] {
+  return [...(prev ?? []), minutes].slice(-SAMPLE)
+}
+
+/** Median of the learned durations, rounded to 15 min. Needs 3 samples; otherwise unknown. */
+export function usuallyTakes(activity: Activity | undefined): number | null {
+  const mins = [...(activity?.recentMinutes ?? [])].sort((a, b) => a - b)
+  if (mins.length < MIN_SAMPLES) return null
   const mid = Math.floor(mins.length / 2)
   const median = mins.length % 2 ? mins[mid] : (mins[mid - 1] + mins[mid]) / 2
   return roundMinutesTo15(median)

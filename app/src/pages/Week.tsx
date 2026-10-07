@@ -88,7 +88,7 @@ export default function Week() {
   const taskOf = (id: string | null) => tasks.find((t) => t.id === id)
 
   const defaultMinutes = (activityId: string | null, taskId: string | null) =>
-    taskOf(taskId)?.estimateMinutes ?? usuallyTakes(activityOf(activityId), sessions) ?? 60
+    taskOf(taskId)?.estimateMinutes ?? usuallyTakes(activityOf(activityId)) ?? 60
 
   // "Schedule" from the to-do list: open a pre-filled new block.
   useEffect(() => {
@@ -537,27 +537,23 @@ function BlockEditor({
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#4f7cff')
-  const [newMins, setNewMins] = useState('')
 
   const createActivity = async () => {
     if (!newName.trim()) return
-    const mins = newMins ? Number(newMins) : null
     const created = await addItem(uid, 'activities', {
       name: newName.trim(),
       color: newColor,
       notes: '',
-      defaultMinutes: mins,
+      recentMinutes: [],
       blockedSites: [],
       locationIds: [],
       materialIds: [],
       archived: false,
     })
     const p: Partial<Draft> = { activityId: created.id }
-    if (isNew && mins) p.endAt = addMinutes(d.startAt, mins)
     setD((x) => ({ ...x, ...p }))
     setCreating(false)
     setNewName('')
-    setNewMins('')
   }
   const [sites, setSites] = useState(draft.blockedSites.join(', '))
   const isNew = draft.id === null
@@ -598,15 +594,6 @@ function BlockEditor({
           <div className="newact">
             <input autoFocus placeholder="New activity name" value={newName} onChange={(e) => setNewName(e.target.value)} />
             <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} aria-label="Color" />
-            <input
-              type="number"
-              min={5}
-              step={5}
-              className="narrow"
-              placeholder="min"
-              value={newMins}
-              onChange={(e) => setNewMins(e.target.value)}
-            />
             <button type="button" className="primary" onClick={createActivity} disabled={!newName.trim()}>
               Add
             </button>

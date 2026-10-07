@@ -1,8 +1,14 @@
+import { MIN_SESSION_MINUTES, pushMinutes } from '@timeblock/shared'
 import {
   addDoc,
   collection,
   deleteDoc,
   doc,
+  getDocs,
+  query,
+  where,
+  writeBatch,
+  type DocumentReference,
   runTransaction,
   setDoc,
   updateDoc,
@@ -27,6 +33,44 @@ export const removeItem = (uid: string, name: string, id: string) => deleteDoc(r
 export const saveSettings = (uid: string, f: Fields) =>
   setDoc(doc(db, `users/${uid}/meta/settings`), clean(f), { merge: true })
 
+type Tx = Parameters<Parameters<typeof runTransaction>[1]>[0]
+
+interface Running {
+  ref: DocumentReference
+  actRef: DocumentReference | null
+  recent: number[]
+  minutes: number
+}
+
+/** Reads the running session (and its activity) first; Firestore needs all reads before writes. */
+async function readRunning(tx: Tx, uid: string, now: Date): Promise<Running | null> {
+  const s = await tx.get(doc(db, `users/${uid}/meta/settings`))
+  const runId = s.data()?.runningSessionId as string | null | undefined
+  if (!runId) return null
+  const ref = doc(db, `users/${uid}/sessions/${runId}`)
+  const rs = await tx.get(ref)
+  if (!rs.exists() || rs.data().endedAt) return null
+  const d = rs.data()
+  const actId = d.activityId as string | null
+  let actRef: DocumentReference | null = null
+  let recent: number[] = []
+  if (actId) {
+    const r = doc(db, `users/${uid}/activities/${actId}`)
+    const as = await tx.get(r)
+    if (as.exists()) {
+      actRef = r
+      recent = as.data().recentMinutes ?? []
+    }
+  }
+  return { ref, actRef, recent, minutes: Math.round((now.getTime() - d.startedAt.toDate().getTime()) / 60000) }
+}
+
+/** Ends the session and teaches the activity how long it took (sessions under 5 min are ignored). */
+function writeEnd(tx: Tx, r: Running, now: Date) {
+  tx.update(r.ref, { endedAt: now })
+  if (r.actRef && r.minutes >= MIN_SESSION_MINUTES) tx.update(r.actRef, { recentMinutes: pushMinutes(r.recent, r.minutes) })
+}
+
 /**
  * Starts a session. In one transaction: ends the running session (if any),
  * creates the new one, and repoints settings.runningSessionId.
@@ -39,13 +83,8 @@ export async function startSession(
   const newRef = doc(collection(db, `users/${uid}/sessions`))
   const now = new Date()
   await runTransaction(db, async (tx) => {
-    const s = await tx.get(settingsRef)
-    const runningId = s.data()?.runningSessionId as string | null | undefined
-    if (runningId) {
-      const rr = doc(db, `users/${uid}/sessions/${runningId}`)
-      const rs = await tx.get(rr)
-      if (rs.exists() && !rs.data().endedAt) tx.update(rr, { endedAt: now })
-    }
+    const running = await readRunning(tx, uid, now)
+    if (running) writeEnd(tx, running, now)
     tx.set(newRef, {
       blockId: link.blockId ?? null,
       activityId: link.activityId ?? null,
@@ -62,12 +101,28 @@ export async function endSession(uid: string) {
   const settingsRef = doc(db, `users/${uid}/meta/settings`)
   const now = new Date()
   await runTransaction(db, async (tx) => {
-    const s = await tx.get(settingsRef)
-    const runningId = s.data()?.runningSessionId as string | null | undefined
-    if (!runningId) return
-    const rr = doc(db, `users/${uid}/sessions/${runningId}`)
-    const rs = await tx.get(rr)
-    if (rs.exists() && !rs.data().endedAt) tx.update(rr, { endedAt: now })
+    const running = await readRunning(tx, uid, now)
+    if (running) writeEnd(tx, running, now)
     tx.set(settingsRef, { runningSessionId: null }, { merge: true })
   })
+}
+
+/** Deletes sessions and blocks older than `days` days (batched). Returns how many docs were removed. */
+export async function pruneHistory(uid: string, days: number): Promise<number> {
+  const cutoff = new Date(Date.now() - days * 86_400_000)
+  const queries = [
+    query(col(uid, 'sessions'), where('startedAt', '<', cutoff)),
+    query(col(uid, 'blocks'), where('endAt', '<', cutoff)),
+  ]
+  let removed = 0
+  for (const q of queries) {
+    const snap = await getDocs(q)
+    for (let i = 0; i < snap.docs.length; i += 400) {
+      const batch = writeBatch(db)
+      snap.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref))
+      await batch.commit()
+    }
+    removed += snap.size
+  }
+  return removed
 }

@@ -20,7 +20,8 @@ export interface Activity {
   /** Needs ALL of these. */
   materialIds: string[]
   blockedSites: string[]
-  defaultMinutes: number | null
+  /** Durations (minutes) of the last 10 completed sessions; "usually takes" is learned from these. */
+  recentMinutes: number[]
   archived: boolean
 }
 

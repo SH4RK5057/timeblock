@@ -61,12 +61,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const uid = user!.uid
   const base = `users/${uid}`
 
+  // Only a 60-day window of blocks and sessions is read: bounds reads and bandwidth.
+  const since = useMemo(() => Timestamp.fromDate(subDays(new Date(), 60)), [])
   const [contexts, c1] = useSub(`${base}/contexts`, fromContext)
   const [activities, c2] = useSub(`${base}/activities`, fromActivity)
   const [tasks, c3] = useSub(`${base}/tasks`, fromTask)
-  const [blocks, c4] = useSub(`${base}/blocks`, fromBlock)
-  // Sessions for "most used" and review: last 60 days.
-  const since = useMemo(() => Timestamp.fromDate(subDays(new Date(), 60)), [])
+  const [blocks, c4] = useSub(`${base}/blocks`, fromBlock, (c) => query(c, where('endAt', '>=', since)))
   const [sessions, c5] = useSub(`${base}/sessions`, fromSession, (c) => query(c, where('startedAt', '>=', since)))
 
   const [settings, setSettings] = useState<Settings>(fromSettings(undefined))
