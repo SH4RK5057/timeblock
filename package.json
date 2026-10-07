@@ -1,0 +1,19 @@
+{
+  "name": "timeblock",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "shared",
+    "app",
+    "firebase",
+    "extension"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w app",
+    "build": "npm run build -w app",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w app && npm run typecheck -w extension",
+    "emulators": "firebase emulators:start --only auth,firestore",
+    "test:rules": "firebase emulators:exec --only firestore \"npm run test -w firebase\"",
+    "build:ext": "npm run build -w extension"
+  }
+}

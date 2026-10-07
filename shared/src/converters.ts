@@ -1,0 +1,80 @@
+import type { Activity, Block, Context, Session, Settings, Task } from './types'
+import { DEFAULT_SETTINGS } from './types'
+
+type Raw = Record<string, any>
+
+/** Firestore Timestamps expose toDate(); turn them (shallowly) into Dates. */
+function dates(data: Raw): Raw {
+  const out: Raw = {}
+  for (const [k, v] of Object.entries(data)) {
+    out[k] = v && typeof v === 'object' && typeof v.toDate === 'function' ? v.toDate() : v
+  }
+  return out
+}
+
+export const fromContext = (id: string, d: Raw): Context => {
+  const r = dates(d)
+  return { id, kind: r.kind ?? 'location', name: r.name ?? '', archived: !!r.archived }
+}
+
+export const fromActivity = (id: string, d: Raw): Activity => {
+  const r = dates(d)
+  return {
+    id,
+    name: r.name ?? '',
+    color: r.color ?? '#4f7cff',
+    notes: r.notes ?? '',
+    locationIds: r.locationIds ?? [],
+    materialIds: r.materialIds ?? [],
+    blockedSites: r.blockedSites ?? [],
+    defaultMinutes: r.defaultMinutes ?? null,
+    archived: !!r.archived,
+  }
+}
+
+export const fromTask = (id: string, d: Raw): Task => {
+  const r = dates(d)
+  return {
+    id,
+    activityId: r.activityId ?? null,
+    title: r.title ?? '',
+    notes: r.notes ?? '',
+    dueAt: r.dueAt ?? null,
+    estimateMinutes: r.estimateMinutes ?? null,
+    locationIds: r.locationIds ?? null,
+    materialIds: r.materialIds ?? null,
+    doneAt: r.doneAt ?? null,
+  }
+}
+
+export const fromBlock = (id: string, d: Raw): Block => {
+  const r = dates(d)
+  return {
+    id,
+    startAt: r.startAt,
+    endAt: r.endAt,
+    activityId: r.activityId ?? null,
+    taskId: r.taskId ?? null,
+    title: r.title ?? null,
+    details: r.details ?? '',
+    blockedSites: r.blockedSites ?? [],
+  }
+}
+
+export const fromSession = (id: string, d: Raw): Session => {
+  const r = dates(d)
+  return {
+    id,
+    blockId: r.blockId ?? null,
+    activityId: r.activityId ?? null,
+    taskId: r.taskId ?? null,
+    startedAt: r.startedAt,
+    endedAt: r.endedAt ?? null,
+    notes: r.notes ?? '',
+  }
+}
+
+export const fromSettings = (d: Raw | undefined): Settings => ({
+  ...DEFAULT_SETTINGS,
+  ...(d ?? {}),
+})

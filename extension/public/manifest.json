@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Timeblock Site Blocker",
+  "version": "0.1.0",
+  "description": "Blocks your chosen websites while a Timeblock block or session is active.",
+  "permissions": ["declarativeNetRequest", "storage", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_title": "Timeblock" },
+  "web_accessible_resources": [{ "resources": ["blocked.html", "blocked.js"], "matches": ["<all_urls>"] }],
+  "icons": { "128": "icon.png" }
+}

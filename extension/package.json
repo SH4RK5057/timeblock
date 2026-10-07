@@ -1,0 +1,20 @@
+{
+  "name": "@timeblock/extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@timeblock/shared": "*",
+    "date-fns": "^4.1.0",
+    "firebase": "^10.14.1"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.280",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.6.3"
+  }
+}
