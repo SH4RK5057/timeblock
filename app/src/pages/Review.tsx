@@ -1,17 +1,31 @@
-import { useState } from 'react'
-import { addDays, format } from 'date-fns'
-import { minutesBetween, weekStart, formatDuration, type Session } from '@timeblock/shared'
+import { useEffect, useState } from 'react'
+import { addDays, format, subDays } from 'date-fns'
+import { minutesBetween, weekStart, formatDuration, type Block, type Session } from '@timeblock/shared'
+import { readArchive } from '../archive'
 import { useData } from '../data'
 import { patchItem, removeItem, endSession } from '../actions'
 import { fromLocalInput, toLocalInput } from '../util'
 import Modal from '../components/Modal'
 
 export default function Review() {
-  const { uid, blocks, sessions, activities, tasks, settings } = useData()
+  const { uid, blocks: liveBlocks, sessions: liveSessions, activities, tasks, settings } = useData()
   const [ws, setWs] = useState(() => weekStart(new Date()))
   const [editing, setEditing] = useState<Session | null>(null)
   const we = addDays(ws, 7)
   const now = new Date()
+
+  // Weeks older than the loaded 60-day window come from this device's local archive.
+  const [old, setOld] = useState<{ blocks: Block[]; sessions: Session[] }>({ blocks: [], sessions: [] })
+  const needsArchive = ws < subDays(now, 58)
+  useEffect(() => {
+    if (!needsArchive) return setOld({ blocks: [], sessions: [] })
+    Promise.all([readArchive<Block>(uid, 'blocks', ws, we), readArchive<Session>(uid, 'sessions', ws, we)]).then(([b, s]) =>
+      setOld({ blocks: b, sessions: s }),
+    )
+  }, [uid, ws.getTime(), needsArchive])
+  const blocks = [...liveBlocks, ...old.blocks]
+  const sessions = [...liveSessions, ...old.sessions]
+  const liveIds = new Set(liveSessions.map((x) => x.id))
 
   const actOf = (activityId: string | null, taskId: string | null) =>
     activityId ?? tasks.find((t) => t.id === taskId)?.activityId ?? null
@@ -77,10 +91,14 @@ export default function Review() {
                 {s.notes && ` · ${s.notes}`}
               </div>
             </span>
-            <button className="link" onClick={() => setEditing(s)}>Edit</button>
+            {liveIds.has(s.id) && <button className="link" onClick={() => setEditing(s)}>Edit</button>}
           </li>
         ))}
-        {!weekSessions.length && <li className="muted">No sessions this week.</li>}
+        {!weekSessions.length && (
+          <li className="muted">
+            {needsArchive ? 'Nothing on this device for that week (older history is kept only where it was cleaned).' : 'No sessions this week.'}
+          </li>
+        )}
       </ul>
 
       {editing && (

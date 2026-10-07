@@ -79,4 +79,5 @@ export const fromSettings = (d: Raw | undefined): Settings => ({
   ...DEFAULT_SETTINGS,
   ...(d ?? {}),
   notify: { ...DEFAULT_SETTINGS.notify, ...(d?.notify ?? {}) },
+  autoClean: { ...DEFAULT_SETTINGS.autoClean, ...(d?.autoClean ?? {}) },
 })

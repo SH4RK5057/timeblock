@@ -1,4 +1,5 @@
-import { MIN_SESSION_MINUTES, pushMinutes } from '@timeblock/shared'
+import { MIN_SESSION_MINUTES, fromBlock, fromSession, pushMinutes } from '@timeblock/shared'
+import { archiveItems, requestPersistence } from './archive'
 import {
   addDoc,
   collection,
@@ -107,16 +108,23 @@ export async function endSession(uid: string) {
   })
 }
 
-/** Deletes sessions and blocks older than `days` days (batched). Returns how many docs were removed. */
-export async function pruneHistory(uid: string, days: number): Promise<number> {
+/**
+ * Removes sessions and blocks older than `days` days from the server. With keepLocal, they are first
+ * saved to this device's archive; if that fails nothing is deleted. Returns how many docs were removed.
+ */
+export async function pruneHistory(uid: string, days: number, keepLocal: boolean): Promise<number> {
   const cutoff = new Date(Date.now() - days * 86_400_000)
-  const queries = [
-    query(col(uid, 'sessions'), where('startedAt', '<', cutoff)),
-    query(col(uid, 'blocks'), where('endAt', '<', cutoff)),
-  ]
+  const [sess, blks] = await Promise.all([
+    getDocs(query(col(uid, 'sessions'), where('startedAt', '<', cutoff))),
+    getDocs(query(col(uid, 'blocks'), where('endAt', '<', cutoff))),
+  ])
+  if (keepLocal) {
+    requestPersistence()
+    await archiveItems(uid, 'sessions', sess.docs.map((d) => fromSession(d.id, d.data())))
+    await archiveItems(uid, 'blocks', blks.docs.map((d) => fromBlock(d.id, d.data())))
+  }
   let removed = 0
-  for (const q of queries) {
-    const snap = await getDocs(q)
+  for (const snap of [sess, blks]) {
     for (let i = 0; i < snap.docs.length; i += 400) {
       const batch = writeBatch(db)
       snap.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref))

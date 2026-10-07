@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { usuallyTakes, type Activity, type Context, type ContextKind } from '@timeblock/shared'
 import { useData } from '../data'
 import { useAuth } from '../auth'
@@ -6,6 +6,7 @@ import { notificationsSupported, requestPermission, showNotification, startAlarm
 import { addItem, patchItem, pruneHistory, saveSettings } from '../actions'
 import { splitList } from '../util'
 import Modal from '../components/Modal'
+import { archiveCount, exportArchive, requestPersistence } from '../archive'
 
 function ActivityForm({ initial, onDone }: { initial?: Activity; onDone: () => void }) {
   const { uid, contexts } = useData()
@@ -83,7 +84,11 @@ function ActivityForm({ initial, onDone }: { initial?: Activity; onDone: () => v
 }
 
 export default function Library() {
-  const { uid, activities, contexts, settings } = useData()
+  const { uid, activities, contexts, settings, sessions, blocks } = useData()
+  const [archived, setArchived] = useState<number | null>(null)
+  useEffect(() => {
+    archiveCount(uid).then(setArchived)
+  }, [uid])
   const [editing, setEditing] = useState<Activity | 'new' | null>(null)
   const [ctxName, setCtxName] = useState('')
   const [ctxKind, setCtxKind] = useState<ContextKind>('location')
@@ -249,18 +254,67 @@ export default function Library() {
         <h3>Storage</h3>
         <p className="muted small">
           Timeblock only loads the last 60 days of blocks and sessions, and learns "usually takes" from 10 numbers per
-          activity. Deleting older history frees space and does not change what it has learned.
+          activity. Cleaning moves older history off the server; what it learned is kept.
+        </p>
+        <div className="quickadd">
+          <label className="small muted">
+            <input
+              type="checkbox"
+              checked={settings.autoClean.enabled}
+              onChange={(e) => {
+                if (e.target.checked) requestPersistence()
+                saveSettings(uid, { autoClean: { ...settings.autoClean, enabled: e.target.checked } })
+              }}
+            />{' '}
+            Auto-clean monthly
+          </label>
+          <label className="small muted">
+            <input
+              type="checkbox"
+              checked={settings.autoClean.keepLocal}
+              onChange={(e) => saveSettings(uid, { autoClean: { ...settings.autoClean, keepLocal: e.target.checked } })}
+            />{' '}
+            Keep a copy on this device
+          </label>
+          <label className="small muted">
+            Older than{' '}
+            <select
+              value={settings.autoClean.days}
+              onChange={(e) => saveSettings(uid, { autoClean: { ...settings.autoClean, days: Number(e.target.value) } })}
+            >
+              <option value={90}>90 days</option>
+              <option value={180}>180 days</option>
+              <option value={365}>1 year</option>
+            </select>
+          </label>
+        </div>
+        {settings.autoClean.enabled && !settings.autoClean.keepLocal && (
+          <p className="overdue small">Without a local copy, cleaned history is gone for good.</p>
+        )}
+        <p className="muted small">
+          Local copies live in this browser only, so they stay on the device that ran the cleanup. Download a backup file
+          to keep them safely. {archived !== null && `${archived} item${archived === 1 ? '' : 's'} archived on this device.`}
+          {settings.autoClean.lastRunMs && ` Last auto-clean: ${new Date(settings.autoClean.lastRunMs).toLocaleDateString()}.`}
         </p>
         <button
           onClick={async () => {
-            if (!confirm('Delete all sessions and blocks older than 90 days? This cannot be undone.')) return
-            setPruneMsg('Deleting…')
-            const n = await pruneHistory(uid, 90)
-            setPruneMsg(`Deleted ${n} old item${n === 1 ? '' : 's'}.`)
+            const keep = settings.autoClean.keepLocal
+            const days = settings.autoClean.days
+            const warn = keep ? 'Move' : 'PERMANENTLY DELETE'
+            if (!confirm(`${warn} all sessions and blocks older than ${days} days${keep ? ' to this device' : ''}?`)) return
+            setPruneMsg('Working…')
+            try {
+              const n = await pruneHistory(uid, days, keep)
+              setPruneMsg(`Cleaned ${n} old item${n === 1 ? '' : 's'}.`)
+              archiveCount(uid).then(setArchived)
+            } catch {
+              setPruneMsg('Could not save a local copy, so nothing was deleted.')
+            }
           }}
         >
-          Delete history older than 90 days
+          Clean now
         </button>{' '}
+        <button onClick={() => exportArchive(uid, { sessions, blocks })}>Download backup</button>{' '}
         <span className="muted small">{pruneMsg}</span>
       </section>
 

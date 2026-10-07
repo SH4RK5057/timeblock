@@ -69,6 +69,8 @@ export interface Settings {
   visibleHours: { start: number; end: number }
   lastPicker: { locationId: string | null; materialIds: string[] }
   notify: { mode: 'off' | 'notify' | 'alarm'; leadMinutes: number }
+  /** Monthly move of old history off the server; keepLocal archives it on this device first. */
+  autoClean: { enabled: boolean; keepLocal: boolean; days: number; lastRunMs: number | null }
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -77,4 +79,5 @@ export const DEFAULT_SETTINGS: Settings = {
   visibleHours: { start: 6, end: 23 },
   lastPicker: { locationId: null, materialIds: [] },
   notify: { mode: 'off', leadMinutes: 0 },
+  autoClean: { enabled: false, keepLocal: true, days: 90, lastRunMs: null },
 }
