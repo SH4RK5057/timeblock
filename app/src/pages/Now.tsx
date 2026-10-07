@@ -1,79 +1,48 @@
-import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { formatDuration, minutesBetween } from '@timeblock/shared'
 import { useData, useRunningSession } from '../data'
-import { endSession, startSession } from '../actions'
+import { startSession } from '../actions'
 import { blockName } from '../util'
 import Picker from '../components/Picker'
-
-function useNow(ms = 15_000) {
-  const [now, setNow] = useState(new Date())
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), ms)
-    return () => clearInterval(t)
-  }, [ms])
-  return now
-}
+import { useSchedule, useTick } from '../components/StatusBar'
 
 export default function Now() {
-  const { uid, blocks, activities, tasks } = useData()
+  const { uid, activities, tasks } = useData()
   const running = useRunningSession()
-  const now = useNow()
-
-  const current = blocks.find((b) => b.startAt <= now && now < b.endAt) ?? null
-  const next =
-    blocks
-      .filter((b) => b.startAt > now)
-      .sort((a, b) => a.startAt.getTime() - b.startAt.getTime())[0] ?? null
-
-  const runningBlock = running?.blockId ? blocks.find((b) => b.id === running.blockId) : null
-  const runningName = running
-    ? runningBlock
-      ? blockName(runningBlock, activities, tasks)
-      : tasks.find((t) => t.id === running.taskId)?.title ??
-        activities.find((a) => a.id === running.activityId)?.name ??
-        'Unscheduled session'
-    : null
-
-  const start = () =>
-    current &&
-    startSession(uid, { blockId: current.id, activityId: current.activityId, taskId: current.taskId })
+  const now = useTick(15_000)
+  const { current, next } = useSchedule(now)
+  const both = current.length > 1
 
   return (
     <div className="now">
-      {running && (
-        <section className="card running">
-          <div className="muted">Running since {format(running.startedAt, 'p')}</div>
-          <h1>{runningName}</h1>
-          <div className="big">{formatDuration(Math.max(0, minutesBetween(running.startedAt, now)))}</div>
-          <button className="primary huge danger" onClick={() => endSession(uid)}>
-            End
-          </button>
-        </section>
-      )}
+      {both && <p className="muted center-text">You have {current.length} things scheduled at once.</p>}
 
-      {current ? (
-        <section className="card">
+      {current.map((b) => (
+        <section key={b.id} className={'card' + (running?.blockId === b.id ? ' active' : '')}>
           <div className="muted">
-            {format(current.startAt, 'p')} – {format(current.endAt, 'p')} ·{' '}
-            {formatDuration(minutesBetween(now, current.endAt))} left
+            {format(b.startAt, 'p')} – {format(b.endAt, 'p')} · {formatDuration(minutesBetween(now, b.endAt))} left
           </div>
-          <h1>{blockName(current, activities, tasks)}</h1>
-          {current.details && <p className="details">{current.details}</p>}
-          {running?.blockId !== current.id && (
-            <button className="primary huge" onClick={start}>
+          <h1>{blockName(b, activities, tasks)}</h1>
+          {b.details && <p className="details">{b.details}</p>}
+          {running?.blockId === b.id ? (
+            <p className="muted">Running. Use the bar above to end it.</p>
+          ) : (
+            <button
+              className="primary huge"
+              onClick={() => startSession(uid, { blockId: b.id, activityId: b.activityId, taskId: b.taskId })}
+            >
               Start
             </button>
           )}
         </section>
-      ) : (
-        !running && (
-          <section className="card">
-            <h1>Free time</h1>
-            <p className="muted">Nothing is scheduled right now. Pick something to do:</p>
-            <Picker />
-          </section>
-        )
+      ))}
+
+      {!current.length && !running && (
+        <section className="card">
+          <h1>Free time</h1>
+          <p className="muted">Nothing is scheduled right now. Pick something to do:</p>
+          <Picker />
+        </section>
       )}
 
       {next && (

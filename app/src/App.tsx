@@ -7,6 +7,7 @@ import Week from './pages/Week'
 import Todo from './pages/Todo'
 import Library from './pages/Library'
 import Review from './pages/Review'
+import StatusBar from './components/StatusBar'
 
 const isMobile = () => window.matchMedia('(max-width: 720px)').matches
 
@@ -26,6 +27,7 @@ function Shell() {
           Sign out
         </button>
       </nav>
+      {ready && <StatusBar />}
       <main className="main">
         {!ready ? (
           <p className="muted">Loading…</p>

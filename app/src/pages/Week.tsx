@@ -389,10 +389,12 @@ export default function Week() {
                   const e = live?.end ?? b.endAt
                   if (live && !isSameDay(s, day)) return null
                   const act = activityOf(b.activityId)
+                  const overlaps = blocks.filter((o) => o.id !== b.id && o.startAt < b.endAt && o.endAt > b.startAt).length
                   return (
                     <div
                       key={b.id}
-                      className={'block' + (live ? ' dragging' : '')}
+                      className={'block' + (live ? ' dragging' : '') + (overlaps ? ' overlap' : '')}
+                      title={overlaps ? 'Overlaps another block: do both' : undefined}
                       style={{
                         top: top(s),
                         height: heightOf(s, e),
@@ -412,7 +414,7 @@ export default function Week() {
                       }}
                       onClick={() => lastPointer.current === 'touch' && openEdit(b)}
                     >
-                      <div className="btitle">{blockName(b, activities, tasks)}</div>
+                      <div className="btitle">{overlaps ? '⇄ ' : ''}{blockName(b, activities, tasks)}</div>
                       <div className="btime">
                         {format(s, 'h:mm')}–{format(e, 'h:mma').toLowerCase()}
                       </div>
