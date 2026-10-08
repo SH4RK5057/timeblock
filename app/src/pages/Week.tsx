@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { addDays, addMinutes, format, isSameDay, startOfDay } from 'date-fns'
 import { writeBatch, doc, collection } from 'firebase/firestore'
@@ -11,6 +11,9 @@ import Modal from '../components/Modal'
 
 
 
+
+const ZOOM_MIN = 0.4
+const ZOOM_MAX = 3
 
 function useIsMobile() {
   const q = '(max-width: 720px)'
@@ -58,8 +61,81 @@ export default function Week() {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [scrollY, setScrollY] = useState(0)
   const [scrollTick, setScrollTick] = useState(0)
-  const pxHour = single ? 64 : 44
+  const [zoom, setZoomState] = useState(() => {
+    try {
+      const z = Number(localStorage.getItem('tb-zoom'))
+      return z >= ZOOM_MIN && z <= ZOOM_MAX ? z : 1
+    } catch {
+      return 1
+    }
+  })
+  const pxHour = (single ? 64 : 44) * zoom
   const pxMin = pxHour / 60
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+  const keepCenter = useRef<number | null>(null) // minutes-from-top at the viewport centre to hold steady
+
+  /** Zoom in/out while keeping whatever time is in the middle of the view in the middle. */
+  const setZoom = (next: number) => {
+    const z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next))
+    const el = wrapRef.current
+    if (el && z !== zoomRef.current) {
+      const oldPxMin = ((single ? 64 : 44) * zoomRef.current) / 60
+      keepCenter.current = (el.scrollTop + el.clientHeight / 2) / oldPxMin
+    }
+    zoomRef.current = z
+    setZoomState(z)
+    try {
+      localStorage.setItem('tb-zoom', String(z))
+    } catch {
+      /* ignore */
+    }
+  }
+  useLayoutEffect(() => {
+    const el = wrapRef.current
+    if (el && keepCenter.current !== null) {
+      el.scrollTop = Math.max(0, keepCenter.current * pxMin - el.clientHeight / 2)
+      keepCenter.current = null
+    }
+  }, [zoom, pxMin])
+
+  // Ctrl/Cmd + wheel (and trackpad pinch) zooms; two-finger pinch on touch screens.
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      setZoom(zoomRef.current * Math.exp(-e.deltaY * 0.01))
+    }
+    let startDist = 0
+    let startZoom = 1
+    const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        startDist = dist(e.touches)
+        startZoom = zoomRef.current
+      }
+    }
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && startDist) {
+        e.preventDefault()
+        setZoom(startZoom * (dist(e.touches) / startDist))
+      }
+    }
+    const onEnd = () => (startDist = 0)
+    el.addEventListener('wheel', onWheel, { passive: false })
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onEnd)
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [single])
   const changeView = (v: 'day' | 'week') => {
     setView(v)
     try {
@@ -304,6 +380,11 @@ export default function Week() {
         <strong className="grow title">
           {single ? format(anchor, 'EEEE, MMM d') : `${format(days[0], 'MMM d')} – ${format(days[6], 'MMM d')}`}
         </strong>
+        <div className="seg" aria-label="Zoom">
+          <button onClick={() => setZoom(zoom / 1.25)} aria-label="Zoom out" title="Zoom out (Ctrl + scroll)">−</button>
+          <button onClick={() => setZoom(1)} aria-label="Reset zoom" title="Reset zoom">{Math.round(zoom * 100)}%</button>
+          <button onClick={() => setZoom(zoom * 1.25)} aria-label="Zoom in" title="Zoom in">+</button>
+        </div>
         {!mobile && (
           <div className="seg">
             <button className={view === 'day' ? 'on' : ''} onClick={() => changeView('day')}>Day</button>
@@ -342,7 +423,7 @@ export default function Week() {
           className="grid"
           style={{ gridTemplateColumns: `44px repeat(${days.length}, 1fr)`, height: gridHeight }}
           ref={gridRef}
-          onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
+          onTouchStart={(e) => (touchX.current = e.touches.length > 1 ? null : e.touches[0].clientX)}
           onTouchEnd={(e) => {
             if (touchX.current === null || !single) return
             const dx = e.changedTouches[0].clientX - touchX.current
