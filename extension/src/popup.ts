@@ -26,6 +26,14 @@ async function render(err = '') {
     <div class="muted">${state.running ? 'Session running' : state.blockName ? 'Scheduled now' : 'Nothing scheduled'}${sites}</div>
     ${state.details ? `<p>${esc(state.details)}</p>` : ''}
     ${state.running ? '<button id="end" class="end">End</button>' : state.blockName ? '<button id="start">Start</button>' : ''}
+    <details><summary class="muted">Why is nothing blocked?</summary>
+      <div class="muted" style="font-size:12px;line-height:1.5">
+        Using: ${esc(state.debug.source)}<br>
+        Blocking now: ${state.domains.length ? esc(state.domains.join(', ')) : 'nothing'}<br>
+        Global sites: ${state.debug.global} · activities loaded: ${state.debug.activities}<br>
+        Blocks today: ${state.debug.blocks} · sessions today: ${state.debug.sessions}<br>
+        ${state.debug.error ? `<span class="err">${esc(state.debug.error)}</span>` : ''}
+      </div></details>
     <button id="open" class="link">Open Timeblock</button>
     <button id="out" class="link">Sign out (${esc(state.email ?? '')})</button>`
   const on = (id: string, f: () => unknown) => {

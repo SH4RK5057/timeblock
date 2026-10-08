@@ -40,6 +40,13 @@ export interface ExtState {
   running: boolean
   domains: string[]
   appUrl: string
+  debug: { blocks: number; activities: number; sessions: number; global: number; source: string; error: string }
+}
+
+let lastError = ''
+const fail = (where: string) => (e: Error) => {
+  lastError = `${where}: ${e.message}`
+  recompute()
 }
 
 let settings: Settings = fromSettings(undefined)
@@ -73,6 +80,14 @@ async function recompute() {
     running: !!running,
     domains,
     appUrl: APP_URL,
+    debug: {
+      blocks: blocks.length,
+      activities: activities.length,
+      sessions: sessions.length,
+      global: settings.globalBlockedSites.length,
+      source: running ? `running session${running.blockId ? ' + its block' : ' (free time, no block)'}` : block ? 'scheduled block' : 'nothing active',
+      error: lastError,
+    },
   }
   await chrome.storage.local.set({ state })
   await scheduleBlockAlarms()
@@ -104,19 +119,19 @@ function listen(uid: string) {
     onSnapshot(doc(db, `${base}/meta/settings`), (s) => {
       settings = fromSettings(s.data())
       recompute()
-    }),
+    }, fail('settings')),
     onSnapshot(query(collection(db, `${base}/blocks`), where('endAt', '>=', today)), (s) => {
       blocks = s.docs.map((d) => fromBlock(d.id, d.data()))
       recompute()
-    }),
+    }, fail('blocks')),
     onSnapshot(collection(db, `${base}/activities`), (s) => {
       activities = s.docs.map((d) => fromActivity(d.id, d.data()))
       recompute()
-    }),
+    }, fail('activities')),
     onSnapshot(query(collection(db, `${base}/sessions`), where('startedAt', '>=', today)), (s) => {
       sessions = s.docs.map((d) => fromSession(d.id, d.data()))
       recompute()
-    }),
+    }, fail('sessions')),
   ]
 }
 
