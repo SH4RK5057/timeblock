@@ -187,7 +187,7 @@ async function fireBlockAlert(blockId: string) {
   const when = settings.notify.leadMinutes ? `Starts at ${b.startAt.toLocaleTimeString([], { timeStyle: 'short' })}` : 'Starting now'
   chrome.notifications.create(`blk-${b.id}`, {
     type: 'basic',
-    iconUrl: 'icon.png',
+    iconUrl: 'icon-128.png',
     title: name,
     message: b.details ? `${when}. ${b.details}` : when,
     requireInteraction: mode === 'alarm',

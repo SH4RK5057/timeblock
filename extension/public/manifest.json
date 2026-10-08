@@ -6,7 +6,11 @@
   "permissions": ["declarativeNetRequest", "storage", "alarms", "notifications", "offscreen"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_popup": "popup.html", "default_title": "Timeblock" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Timeblock",
+    "default_icon": { "16": "icon-16.png", "32": "icon-32.png", "48": "icon-48.png", "128": "icon-128.png" }
+  },
   "web_accessible_resources": [{ "resources": ["blocked.html", "blocked.js"], "matches": ["<all_urls>"] }],
-  "icons": { "128": "icon.png" }
+  "icons": { "16": "icon-16.png", "32": "icon-32.png", "48": "icon-48.png", "128": "icon-128.png" }
 }
