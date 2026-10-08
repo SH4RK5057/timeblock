@@ -30,6 +30,7 @@ async function render(err = '') {
       <div class="muted" style="font-size:12px;line-height:1.5">
         Using: ${esc(state.debug.source)}<br>
         Blocking now: ${state.domains.length ? esc(state.domains.join(', ')) : 'nothing'}<br>
+        Browser rules active: ${state.debug.rules}<br>
         Global sites: ${state.debug.global} · activities loaded: ${state.debug.activities}<br>
         Blocks today: ${state.debug.blocks} · sessions today: ${state.debug.sessions}<br>
         ${state.debug.error ? `<span class="err">${esc(state.debug.error)}</span>` : ''}

@@ -22,6 +22,7 @@ import {
   fromBlock,
   fromSession,
   fromSettings,
+  isBlocked,
   MIN_SESSION_MINUTES,
   pushMinutes,
   resolveBlocklist,
@@ -40,7 +41,7 @@ export interface ExtState {
   running: boolean
   domains: string[]
   appUrl: string
-  debug: { blocks: number; activities: number; sessions: number; global: number; source: string; error: string }
+  debug: { rules: number; blocks: number; activities: number; sessions: number; global: number; source: string; error: string }
 }
 
 let lastError = ''
@@ -61,7 +62,31 @@ const label = (b: Block | null, s: Session | null) => {
   return b?.title || act?.name || (s ? 'Unscheduled session' : null)
 }
 
-async function recompute() {
+let chain: Promise<void> = Promise.resolve()
+/** One recompute at a time: overlapping runs fight over the same rule ids. */
+function recompute() {
+  chain = chain.then(doRecompute).catch((e) => {
+    lastError = `recompute: ${e?.message ?? e}`
+  })
+  return chain
+}
+
+const blockedPage = () => chrome.runtime.getURL('blocked.html')
+let currentDomains: string[] = []
+
+/** Sends a tab on a blocked site to the block page (also covers tabs that were already open). */
+async function enforceTab(tab: chrome.tabs.Tab, domains: string[]) {
+  if (!tab.id || !tab.url || !domains.length) return
+  try {
+    const u = new URL(tab.url)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return
+    if (isBlocked(u.hostname, domains)) await chrome.tabs.update(tab.id, { url: `${blockedPage()}?u=${encodeURIComponent(tab.url)}` })
+  } catch {
+    /* tab closed or unparsable url */
+  }
+}
+
+async function doRecompute() {
   const now = new Date()
   const running = sessions.find((s) => s.id === settings.runningSessionId && !s.endedAt) ?? null
   const block = running
@@ -81,6 +106,7 @@ async function recompute() {
     domains,
     appUrl: APP_URL,
     debug: {
+      rules: 0,
       blocks: blocks.length,
       activities: activities.length,
       sessions: sessions.length,
@@ -89,27 +115,43 @@ async function recompute() {
       error: lastError,
     },
   }
-  await chrome.storage.local.set({ state })
+  currentDomains = domains
   await scheduleBlockAlarms()
 
   // One redirect rule per domain; requestDomains also matches subdomains.
-  const existing = await chrome.declarativeNetRequest.getDynamicRules()
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: existing.map((r) => r.id),
-    addRules: domains.map((d, i) => ({
-      id: i + 1,
-      priority: 1,
-      action: {
-        type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
-        redirect: { extensionPath: '/blocked.html' },
-      },
-      condition: {
-        requestDomains: [d],
-        resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME],
-      },
-    })),
-  })
+  try {
+    const existing = await chrome.declarativeNetRequest.getDynamicRules()
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: existing.map((r) => r.id),
+      addRules: domains.map((d, i) => ({
+        id: i + 1,
+        priority: 1,
+        action: {
+          type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
+          redirect: { extensionPath: '/blocked.html' },
+        },
+        condition: {
+          requestDomains: [d],
+          resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME],
+        },
+      })),
+    })
+    state.debug.rules = (await chrome.declarativeNetRequest.getDynamicRules()).length
+  } catch (e: any) {
+    lastError = `rules: ${e?.message ?? e}`
+    state.debug.error = lastError
+  }
+
+  // Belt and braces: tabs already open on a blocked site are redirected too.
+  if (domains.length) {
+    for (const tab of await chrome.tabs.query({})) await enforceTab(tab, domains)
+  }
+  await chrome.storage.local.set({ state })
 }
+
+chrome.tabs.onUpdated.addListener((_id, change, tab) => {
+  if (change.url || change.status === 'loading') void enforceTab(tab, currentDomains)
+})
 
 function listen(uid: string) {
   unsubs.forEach((u) => u())

@@ -6,6 +6,8 @@ const CHARS = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const rand = () => Array.from(crypto.getRandomValues(new Uint32Array(30)), (n) => CHARS[n % CHARS.length]).join('')
 const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)
 
+const original = new URLSearchParams(location.search).get('u')
+
 async function main() {
   const { state } = (await chrome.storage.local.get('state')) as { state?: ExtState }
   root.innerHTML = `
@@ -41,7 +43,9 @@ function startChallenge() {
         done++
         if (done >= CHALLENGES) {
           await chrome.runtime.sendMessage({ type: 'allow5' })
-          box.innerHTML = '<p>Unblocked for 5 minutes. Reload the page.</p>'
+          box.innerHTML = original
+            ? `<p>Unblocked for 5 minutes.</p><a href="${esc(original)}">Continue to the site</a>`
+            : '<p>Unblocked for 5 minutes. Reload the page.</p>'
           return
         }
         target = rand()

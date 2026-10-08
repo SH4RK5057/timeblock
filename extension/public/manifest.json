@@ -3,7 +3,7 @@
   "name": "Timeblock Site Blocker",
   "version": "0.1.0",
   "description": "Blocks your chosen websites while a Timeblock block or session is active.",
-  "permissions": ["declarativeNetRequest", "storage", "alarms", "notifications", "offscreen"],
+  "permissions": ["declarativeNetRequest", "storage", "alarms", "notifications", "offscreen", "tabs"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },
   "action": {
