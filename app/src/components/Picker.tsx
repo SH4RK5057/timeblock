@@ -4,7 +4,9 @@ import { buildPicker, usuallyTakes, type Task } from '@timeblock/shared'
 import { useData } from '../data'
 import { saveSettings, startSession } from '../actions'
 
-export default function Picker() {
+const endIn = (m: number) => new Date(Date.now() + m * 60_000)
+
+export default function Picker({ minutes }: { minutes: number }) {
   const { uid, contexts, activities, tasks, sessions, settings } = useData()
   const { locationId, materialIds } = settings.lastPicker
   const locations = contexts.filter((c) => c.kind === 'location' && !c.archived)
@@ -28,7 +30,7 @@ export default function Picker() {
     const overdue = t.dueAt && t.dueAt < new Date()
     return (
       <li key={t.id}>
-        <button className="pickrow" onClick={() => startSession(uid, { taskId: t.id, activityId: t.activityId })}>
+        <button className="pickrow" onClick={() => startSession(uid, { taskId: t.id, activityId: t.activityId, plannedEndAt: endIn(minutes) })}>
           <span className="grow">
             <div>{t.title}</div>
             <div className={'small ' + (overdue ? 'overdue' : 'muted')}>
@@ -85,7 +87,7 @@ export default function Picker() {
             {g.activity ? (
               <button
                 className="pickrow"
-                onClick={() => startSession(uid, { activityId: g.activity!.id })}
+                onClick={() => startSession(uid, { activityId: g.activity!.id, plannedEndAt: endIn(minutes) })}
               >
                 <span className="dot" style={{ background: g.activity.color }} />
                 <span className="grow">

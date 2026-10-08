@@ -71,6 +71,7 @@ export const fromSession = (id: string, d: Raw): Session => {
     taskId: r.taskId ?? null,
     startedAt: r.startedAt,
     endedAt: r.endedAt ?? null,
+    plannedEndAt: r.plannedEndAt ?? null,
     notes: r.notes ?? '',
   }
 }

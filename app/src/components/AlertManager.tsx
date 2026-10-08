@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import type { Block } from '@timeblock/shared'
-import { useData } from '../data'
+import { useData, useRunningSession } from '../data'
 import { startSession } from '../actions'
 import { blockName } from '../util'
 import { showNotification, startAlarmSound, stopAlarmSound } from '../alerts'
@@ -30,6 +30,23 @@ export default function AlertManager() {
   const { uid, blocks, activities, tasks, settings } = useData()
   const now = useTick(1000)
   const [ringing, setRinging] = useState<Block | null>(null)
+  const running = useRunningSession()
+
+  // Free-time window ended: one notification (when notifications are on).
+  useEffect(() => {
+    const end = running?.plannedEndAt
+    if (!running || !end || settings.notify.mode === 'off') return
+    const t = now.getTime()
+    const key = `tb-planned-${running.id}`
+    if (t < end.getTime() || t - end.getTime() > FRESH_MS) return
+    try {
+      if (localStorage.getItem(key)) return
+      localStorage.setItem(key, '1')
+    } catch {
+      /* fire anyway */
+    }
+    showNotification("Free time is up", 'Time to wrap up what you are doing.', key, settings.notify.mode === 'alarm')
+  }, [now, running, settings.notify.mode])
 
   useEffect(() => {
     for (const b of blocks) {

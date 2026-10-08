@@ -60,6 +60,8 @@ export interface Session {
   taskId: string | null
   startedAt: Date
   endedAt: Date | null
+  /** Free-time sessions: when you meant to stop (defaults to the next scheduled block). */
+  plannedEndAt: Date | null
   notes: string
 }
 

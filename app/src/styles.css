@@ -202,3 +202,8 @@ button.huge { width: 100%; padding: 20px; font-size: 22px; border-radius: 12px; 
 button.link.left { justify-self: start; }
 
 .search { width: 100%; margin-bottom: 6px; padding: 8px 10px; }
+
+.window { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px; }
+.window b { min-width: 52px; text-align: center; font-size: 18px; }
+.chipbtn.dark { background: var(--card); color: var(--fg); border-color: var(--line); }
+.chipbtn.dark.on { background: var(--accent); color: #fff; border-color: var(--accent); }

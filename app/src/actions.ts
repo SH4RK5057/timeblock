@@ -78,7 +78,7 @@ function writeEnd(tx: Tx, r: Running, now: Date) {
  */
 export async function startSession(
   uid: string,
-  link: { blockId?: string | null; activityId?: string | null; taskId?: string | null },
+  link: { blockId?: string | null; activityId?: string | null; taskId?: string | null; plannedEndAt?: Date | null },
 ) {
   const settingsRef = doc(db, `users/${uid}/meta/settings`)
   const newRef = doc(collection(db, `users/${uid}/sessions`))
@@ -92,6 +92,7 @@ export async function startSession(
       taskId: link.taskId ?? null,
       startedAt: now,
       endedAt: null,
+      plannedEndAt: link.plannedEndAt ?? null,
       notes: '',
     })
     tx.set(settingsRef, { runningSessionId: newRef.id }, { merge: true })

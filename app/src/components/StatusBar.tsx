@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { formatDuration, minutesBetween, type Block } from '@timeblock/shared'
 import { useData, useRunningSession } from '../data'
-import { endSession, startSession } from '../actions'
+import { endSession, patchItem, startSession } from '../actions'
 import { blockName } from '../util'
 
 export function useTick(ms: number) {
@@ -52,11 +52,22 @@ export default function StatusBar() {
 
   if (running) {
     const secs = Math.max(0, Math.floor((now.getTime() - running.startedAt.getTime()) / 1000))
+    const planned = running.plannedEndAt
+    const leftMin = planned ? Math.ceil((planned.getTime() - now.getTime()) / 60000) : null
+    const nudge = (m: number) =>
+      planned && patchItem(uid, 'sessions', running.id, { plannedEndAt: new Date(planned.getTime() + m * 60000) })
     return (
       <div className="status running">
         <div className="grow">
           <div className="small">Doing now</div>
           <b>{runningName}</b> <span className="clock">{clock(secs)}</span>
+          {leftMin !== null && (
+            <div className="small">
+              {leftMin >= 0 ? `${formatDuration(Math.max(leftMin, 0))} left` : `${formatDuration(-leftMin)} over`}
+              <button className="chipbtn" onClick={() => nudge(-5)}>−5m</button>
+              <button className="chipbtn" onClick={() => nudge(5)}>+5m</button>
+            </div>
+          )}
           {pending.length > 0 && (
             <div className="small">
               Also scheduled:{' '}

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { format } from 'date-fns'
 import { formatDuration, minutesBetween } from '@timeblock/shared'
 import { useData, useRunningSession } from '../data'
@@ -12,6 +13,13 @@ export default function Now() {
   const now = useTick(15_000)
   const { current, next } = useSchedule(now)
   const both = current.length > 1
+
+  // Free time defaults to the gap until the next block; you can shorten it (or stretch it back).
+  const gap = next ? Math.max(1, minutesBetween(now, next.startAt)) : null
+  const cap = gap ?? 480
+  const [custom, setCustom] = useState<number | null>(null)
+  const minutes = Math.max(5, Math.min(custom ?? gap ?? 60, cap))
+  const setMinutes = (m: number) => setCustom(Math.max(5, Math.min(m, cap)))
 
   return (
     <div className="now">
@@ -40,8 +48,26 @@ export default function Now() {
       {!current.length && !running && (
         <section className="card">
           <h1>Free time</h1>
-          <p className="muted">Nothing is scheduled right now. Pick something to do:</p>
-          <Picker />
+          <p className="muted">
+            {next ? `Free for ${formatDuration(gap!)} until ${format(next.startAt, 'p')}.` : 'Nothing else is scheduled.'}
+          </p>
+          <div className="window">
+            <span className="small muted">I'll spend</span>
+            <button onClick={() => setMinutes(minutes - 5)} aria-label="Shorter">−</button>
+            <b>{formatDuration(minutes)}</b>
+            <button onClick={() => setMinutes(minutes + 5)} aria-label="Longer">+</button>
+            {[15, 30, 45, 60].filter((m) => m < cap).map((m) => (
+              <button key={m} className={'chipbtn dark' + (minutes === m ? ' on' : '')} onClick={() => setMinutes(m)}>
+                {m}m
+              </button>
+            ))}
+            {gap && (
+              <button className="chipbtn dark" onClick={() => setCustom(null)}>
+                All of it
+              </button>
+            )}
+          </div>
+          <Picker minutes={minutes} />
         </section>
       )}
 
