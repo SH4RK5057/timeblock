@@ -796,7 +796,7 @@ function BlockEditor({
     <Modal
       title={isNew ? 'New block' : 'Edit block'}
       onClose={onClose}
-      side={isNew ? <DayPreview start={d.startAt} end={d.endAt} id={d.id} /> : undefined}
+      side={<DayPreview start={d.startAt} end={d.endAt} id={d.id} />}
     >
       <form
         className="form"
