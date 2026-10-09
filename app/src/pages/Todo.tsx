@@ -15,7 +15,7 @@ const GROUPS: [TaskGroup, string][] = [
 ]
 
 export default function Todo() {
-  const { uid, tasks, activities } = useData()
+  const { uid, tasks, activities, blocks } = useData()
   const nav = useNavigate()
   const [title, setTitle] = useState('')
   const [date, setDate] = useState('')
@@ -63,6 +63,10 @@ export default function Todo() {
   const now = new Date()
   const byDue = (a: Task, b: Task) => (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity)
 
+  /** The next upcoming (or in-progress) block for a task, if it already has one. */
+  const scheduledBlock = (t: Task) =>
+    blocks.filter((b) => b.taskId === t.id && b.endAt > now).sort((a, b) => a.startAt.getTime() - b.startAt.getTime())[0]
+
   const row = (t: Task) => (
     <li key={t.id} className={'task' + (t.doneAt ? ' done' : '')}>
       <input
@@ -86,11 +90,16 @@ export default function Todo() {
       <button className="link" onClick={() => setEditing(t)}>
         Edit
       </button>
-      {!t.doneAt && (
-        <button className="link" onClick={() => nav(`/week?task=${t.id}`)}>
-          Schedule
-        </button>
-      )}
+      {!t.doneAt &&
+        (scheduledBlock(t) ? (
+          <span className="muted small" title="Already scheduled">
+            ✓ {format(scheduledBlock(t)!.startAt, 'EEE p')}
+          </span>
+        ) : (
+          <button className="link" onClick={() => nav(`/week?task=${t.id}`)}>
+            Schedule
+          </button>
+        ))}
       <button className="link" aria-label="Delete" onClick={() => removeItem(uid, 'tasks', t.id)}>
         ✕
       </button>

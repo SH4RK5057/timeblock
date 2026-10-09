@@ -235,3 +235,28 @@ button.link.left { justify-self: start; }
 .dayrow { display: flex; align-items: center; gap: 8px; }
 .dayrow .chip { width: 58px; text-align: center; justify-content: center; }
 .colorpick input { width: 44px; padding: 2px; }
+
+.mins { width: 70px; text-align: center; font-size: 18px; font-weight: 700; }
+
+/* small blocks: one line, no overflow */
+.block.small { display: flex; align-items: center; gap: 6px; padding: 1px 6px; }
+.block.small .btitle { flex: 0 1 auto; }
+.block.small .btime { flex: none; white-space: nowrap; font-size: 11px; }
+.block.small .resize { height: 5px; }
+.block.tiny { display: flex; align-items: center; gap: 5px; padding: 0 5px; font-size: 10px; line-height: 1; border-radius: 4px; }
+.block.tiny .btitle { font-size: 10px; flex: 0 1 auto; }
+.block.tiny .btime { display: none; }
+.block.tiny .resize { height: 4px; }
+
+/* where this block lands in the day */
+.daymini { display: grid; gap: 4px; }
+.dmbar { position: relative; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); overflow: hidden; cursor: pointer; }
+.dmblock { position: absolute; top: 4px; bottom: 4px; border-radius: 3px; opacity: .55; }
+.dmfixed { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--c) 25%, transparent); }
+.dmnew { position: absolute; top: 1px; bottom: 1px; border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 5px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+.dmnow { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--danger); }
+.dmticks { position: relative; height: 14px; font-size: 10px; color: var(--muted); }
+.dmticks span { position: absolute; transform: translateX(-50%); }
+
+.lenrow { display: flex; gap: 6px; align-items: end; flex-wrap: wrap; }
+.lenrow label { width: 150px; }

@@ -18,10 +18,14 @@ export default function Now() {
 
   // Free time defaults to the gap until the next block; you can shorten it (or stretch it back).
   const gap = next ? Math.max(1, minutesBetween(now, next.startAt)) : null
-  const cap = gap ?? 480
+  const MAX_MIN = 720
   const [custom, setCustom] = useState<number | null>(null)
-  const minutes = Math.max(5, Math.min(custom ?? gap ?? 60, cap))
-  const setMinutes = (m: number) => setCustom(Math.max(5, Math.min(m, cap)))
+  const [typed, setTyped] = useState<string | null>(null) // what's in the box while you type
+  const minutes = Math.max(5, Math.min(custom ?? gap ?? 60, MAX_MIN))
+  const setMinutes = (m: number) => {
+    setTyped(null)
+    setCustom(Math.max(5, Math.min(m, MAX_MIN)))
+  }
 
   return (
     <div className="now">
@@ -56,19 +60,38 @@ export default function Now() {
           <div className="window">
             <span className="small muted">I'll spend</span>
             <button onClick={() => setMinutes(minutes - 5)} aria-label="Shorter">−</button>
-            <b>{formatDuration(minutes)}</b>
+            <input
+              type="number"
+              inputMode="numeric"
+              className="mins"
+              min={5}
+              max={MAX_MIN}
+              step={5}
+              aria-label="Minutes of free time"
+              value={typed ?? String(minutes)}
+              onChange={(e) => {
+                setTyped(e.target.value)
+                const n = Number(e.target.value)
+                if (n >= 5) setCustom(Math.min(Math.round(n), MAX_MIN))
+              }}
+              onBlur={() => setTyped(null)}
+            />
+            <span className="small muted">min</span>
             <button onClick={() => setMinutes(minutes + 5)} aria-label="Longer">+</button>
-            {[15, 30, 45, 60].filter((m) => m < cap).map((m) => (
+            {[15, 30, 45, 60].filter((m) => !gap || m < gap).map((m) => (
               <button key={m} className={'chipbtn dark' + (minutes === m ? ' on' : '')} onClick={() => setMinutes(m)}>
                 {m}m
               </button>
             ))}
             {gap && (
-              <button className="chipbtn dark" onClick={() => setCustom(null)}>
+              <button className="chipbtn dark" onClick={() => { setTyped(null); setCustom(null) }}>
                 All of it
               </button>
             )}
           </div>
+          {gap && minutes > gap && (
+            <p className="overdue small">That runs {formatDuration(minutes - gap)} into your next block.</p>
+          )}
           <Picker minutes={minutes} />
         </section>
       )}
