@@ -1,12 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { addDays, addMinutes, format, isSameDay, startOfDay } from 'date-fns'
+import { addDays, addMinutes, differenceInCalendarDays, format, isSameDay, startOfDay } from 'date-fns'
 import { writeBatch, doc, collection } from 'firebase/firestore'
 import { type AlertMode, minutesBetween, snapToSlot, usuallyTakes, SLOT_MINUTES, weekStart, type Block, type Session } from '@timeblock/shared'
 import { useData } from '../data'
 import { addItem, logSession, patchItem, removeItem } from '../actions'
 import { db } from '../firebase'
-import { blockName, fromLocalInput, splitList, toLocalInput } from '../util'
+import { blockName, parseTime, splitList } from '../util'
+
+const minutesOnDay = (day: Date, mins: number) => addMinutes(startOfDay(day), mins)
 import Modal from '../components/Modal'
 import SessionModal from '../components/SessionModal'
 
@@ -760,6 +762,8 @@ function BlockEditor({
   const [d, setD] = useState(draft)
   const [creating, setCreating] = useState(false)
   const [lenText, setLenText] = useState<string | null>(null)
+  const [startText, setStartText] = useState<string | null>(null)
+  const [endText, setEndText] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#4f7cff')
 
@@ -856,25 +860,52 @@ function BlockEditor({
         </label>
         <div className="row">
           <label>
-            Start
+            Date
             <input
-              type="datetime-local"
-              step={900}
-              value={toLocalInput(d.startAt)}
+              type="date"
+              value={format(d.startAt, 'yyyy-MM-dd')}
               onChange={(e) => {
                 if (!e.target.value) return
-                const start = fromLocalInput(e.target.value)
+                const n = differenceInCalendarDays(new Date(e.target.value + 'T00:00'), d.startAt)
+                set({ startAt: addDays(d.startAt, n), endAt: addDays(d.endAt, n) })
+              }}
+            />
+          </label>
+          <label>
+            Start
+            <input
+              inputMode="text"
+              placeholder="3:30pm"
+              value={startText ?? format(d.startAt, 'h:mm a')}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => {
+                setStartText(e.target.value)
+                const t = parseTime(e.target.value)
+                if (!t) return
+                // sliding the start keeps the length, so the whole block moves
+                const start = minutesOnDay(d.startAt, t.minutes)
                 set({ startAt: start, endAt: new Date(start.getTime() + (d.endAt.getTime() - d.startAt.getTime())) })
               }}
+              onBlur={() => setStartText(null)}
             />
           </label>
           <label>
             End
             <input
-              type="datetime-local"
-              step={900}
-              value={toLocalInput(d.endAt)}
-              onChange={(e) => e.target.value && set({ endAt: fromLocalInput(e.target.value) })}
+              inputMode="text"
+              placeholder="4:30pm"
+              value={endText ?? format(d.endAt, 'h:mm a')}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => {
+                setEndText(e.target.value)
+                const t = parseTime(e.target.value)
+                if (!t) return
+                let end = minutesOnDay(d.startAt, t.minutes)
+                // "1" after a 9am start means 1pm unless am/pm was typed
+                if (end <= d.startAt && !t.hasMeridiem) end = minutesOnDay(d.startAt, t.minutes + 12 * 60)
+                set({ endAt: end })
+              }}
+              onBlur={() => setEndText(null)}
             />
           </label>
         </div>
