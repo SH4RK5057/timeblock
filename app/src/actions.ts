@@ -135,3 +135,34 @@ export async function pruneHistory(uid: string, days: number, keepLocal: boolean
   }
   return removed
 }
+
+/** Records something you already did. It teaches the activity's "usually takes" like a live session. */
+export async function logSession(
+  uid: string,
+  s: { blockId?: string | null; activityId?: string | null; taskId?: string | null; startedAt: Date; endedAt: Date; notes?: string },
+) {
+  const newRef = doc(collection(db, `users/${uid}/sessions`))
+  const minutes = Math.round((s.endedAt.getTime() - s.startedAt.getTime()) / 60000)
+  await runTransaction(db, async (tx) => {
+    let actRef: DocumentReference | null = null
+    let recent: number[] = []
+    if (s.activityId && minutes >= MIN_SESSION_MINUTES) {
+      const r = doc(db, `users/${uid}/activities/${s.activityId}`)
+      const as = await tx.get(r)
+      if (as.exists()) {
+        actRef = r
+        recent = as.data().recentMinutes ?? []
+      }
+    }
+    tx.set(newRef, {
+      blockId: s.blockId ?? null,
+      activityId: s.activityId ?? null,
+      taskId: s.taskId ?? null,
+      startedAt: s.startedAt,
+      endedAt: s.endedAt,
+      plannedEndAt: null,
+      notes: s.notes ?? '',
+    })
+    if (actRef) tx.update(actRef, { recentMinutes: pushMinutes(recent, minutes) })
+  })
+}

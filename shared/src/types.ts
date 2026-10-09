@@ -25,6 +25,8 @@ export interface Activity {
   archived: boolean
 }
 
+export type Repeat = 'none' | 'daily' | 'weekly'
+
 export interface Task {
   id: string
   activityId: string | null
@@ -36,6 +38,8 @@ export interface Task {
   locationIds: string[] | null
   materialIds: string[] | null
   doneAt: Date | null
+  /** Repeating tasks never complete: checking one off moves its due date to the next occurrence. */
+  repeat: Repeat
 }
 
 export type AlertMode = 'default' | 'notify' | 'alarm' | 'none'
@@ -82,4 +86,15 @@ export const DEFAULT_SETTINGS: Settings = {
   lastPicker: { locationId: null, materialIds: [] },
   notify: { mode: 'off', leadMinutes: 0 },
   autoClean: { enabled: false, keepLocal: true, days: 90, lastRunMs: null },
+}
+
+/** A fixed weekly commitment (class, work shift) drawn behind the planner. Not an activity. */
+export interface Overlay {
+  id: string
+  title: string
+  color: string
+  /** 0 = Monday ... 6 = Sunday */
+  days: number[]
+  startMin: number
+  endMin: number
 }

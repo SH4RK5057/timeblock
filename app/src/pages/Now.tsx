@@ -5,6 +5,7 @@ import { useData, useRunningSession } from '../data'
 import { startSession } from '../actions'
 import { blockName } from '../util'
 import Picker from '../components/Picker'
+import SessionModal from '../components/SessionModal'
 import { useSchedule, useTick } from '../components/StatusBar'
 
 export default function Now() {
@@ -13,6 +14,7 @@ export default function Now() {
   const now = useTick(15_000)
   const { current, next } = useSchedule(now)
   const both = current.length > 1
+  const [logging, setLogging] = useState(false)
 
   // Free time defaults to the gap until the next block; you can shorten it (or stretch it back).
   const gap = next ? Math.max(1, minutesBetween(now, next.startAt)) : null
@@ -77,6 +79,12 @@ export default function Now() {
           <strong>{blockName(next, activities, tasks)}</strong>
         </section>
       )}
+      <p className="center-text">
+        <button className="link" onClick={() => setLogging(true)}>
+          + Log something I already did
+        </button>
+      </p>
+      {logging && <SessionModal onClose={() => setLogging(false)} />}
     </div>
   )
 }

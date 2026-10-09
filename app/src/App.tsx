@@ -18,8 +18,15 @@ function Shell() {
   const { signOut } = useAuth()
   return (
     <div className="shell">
+      <header className="topbar">
+        <img className="logo" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" />
+        <strong>Timeblock</strong>
+      </header>
       <nav className="nav">
-        <strong className="brand">Timeblock</strong>
+        <span className="brand">
+          <img className="logo" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" />
+          <strong>Timeblock</strong>
+        </span>
         <NavLink to="/now">Now</NavLink>
         <NavLink to="/week">Week</NavLink>
         <NavLink to="/todo">To-do</NavLink>

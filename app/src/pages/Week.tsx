@@ -2,12 +2,13 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEven
 import { useSearchParams } from 'react-router-dom'
 import { addDays, addMinutes, format, isSameDay, startOfDay } from 'date-fns'
 import { writeBatch, doc, collection } from 'firebase/firestore'
-import { type AlertMode, minutesBetween, snapToSlot, usuallyTakes, SLOT_MINUTES, weekStart, type Block } from '@timeblock/shared'
+import { type AlertMode, minutesBetween, snapToSlot, usuallyTakes, SLOT_MINUTES, weekStart, type Block, type Session } from '@timeblock/shared'
 import { useData } from '../data'
-import { addItem, patchItem, removeItem } from '../actions'
+import { addItem, logSession, patchItem, removeItem } from '../actions'
 import { db } from '../firebase'
 import { blockName, fromLocalInput, splitList, toLocalInput } from '../util'
 import Modal from '../components/Modal'
+import SessionModal from '../components/SessionModal'
 
 
 
@@ -48,7 +49,7 @@ type Drag = {
 }
 
 export default function Week() {
-  const { uid, blocks, activities, tasks, sessions, settings } = useData()
+  const { uid, blocks, activities, tasks, sessions, settings, overlays } = useData()
   const mobile = useIsMobile()
   const [view, setView] = useState<'day' | 'week'>(() => {
     try {
@@ -61,6 +62,32 @@ export default function Week() {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [scrollY, setScrollY] = useState(0)
   const [scrollTick, setScrollTick] = useState(0)
+  // Plan = what you scheduled, Actual = what happened (log it after the fact), Both = plan with an actuals strip.
+  const [mode, setModeState] = useState<'plan' | 'actual' | 'both'>(() => {
+    try {
+      const m = localStorage.getItem('tb-mode')
+      return m === 'plan' || m === 'actual' ? m : 'both'
+    } catch {
+      return 'both'
+    }
+  })
+  const setMode = (m: 'plan' | 'actual' | 'both') => {
+    setModeState(m)
+    try {
+      localStorage.setItem('tb-mode', m)
+    } catch {
+      /* ignore */
+    }
+  }
+  const [showFixed, setShowFixed] = useState(() => {
+    try {
+      return localStorage.getItem('tb-fixed') !== '0'
+    } catch {
+      return true
+    }
+  })
+  const [logDraft, setLogDraft] = useState<{ start: Date; end: Date } | null>(null)
+  const [editSession, setEditSession] = useState<Session | null>(null)
   const [zoom, setZoomState] = useState(() => {
     try {
       const z = Number(localStorage.getItem('tb-zoom'))
@@ -246,6 +273,7 @@ export default function Week() {
   function finishDrag(d: Drag) {
     if (d.kind === 'create') {
       const end = d.moved ? d.end : addMinutes(d.start, 60)
+      if (mode === 'actual') return setLogDraft({ start: d.start, end })
       setDraft({
         id: null,
         startAt: d.start,
@@ -284,6 +312,7 @@ export default function Week() {
     const p = pointAt(e.clientX, e.clientY)
     if (!p) return
     const s = snapToSlot(p, 'floor')
+    if (mode === 'actual') return setLogDraft({ start: s, end: addMinutes(s, 60) })
     setDraft({
       id: null,
       startAt: s,
@@ -309,6 +338,31 @@ export default function Week() {
       return { b, lane }
     })
     return { placed, lanes: Math.max(1, laneEnds.length) }
+  }
+
+  /** Same lane packing as blocks, for sessions drawn as real blocks in Actual mode. */
+  function layoutSessions(day: Date) {
+    const end = (x: Session) => x.endedAt ?? new Date()
+    const list = sessions.filter((x) => isSameDay(x.startedAt, day)).sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime())
+    const laneEnds: Date[] = []
+    const placed = list.map((x) => {
+      let lane = laneEnds.findIndex((e) => e <= x.startedAt)
+      if (lane < 0) lane = laneEnds.length
+      laneEnds[lane] = end(x)
+      return { x, lane }
+    })
+    return { placed, lanes: Math.max(1, laneEnds.length) }
+  }
+
+  async function logBlockDone(d: Draft) {
+    await logSession(uid, {
+      blockId: d.id,
+      activityId: d.activityId,
+      taskId: d.taskId,
+      startedAt: d.startAt,
+      endedAt: d.endAt < new Date() ? d.endAt : new Date(),
+    })
+    setDraft(null)
   }
 
   const top = (d: Date) => Math.max(0, (d.getHours() * 60 + d.getMinutes() - hStart * 60) * pxMin)
@@ -391,7 +445,36 @@ export default function Week() {
             <button className={view === 'week' ? 'on' : ''} onClick={() => changeView('week')}>Week</button>
           </div>
         )}
-        <button className="primary" onClick={() => newBlockNow()}>+ Block</button>
+        <button
+          className="primary"
+          onClick={() => (mode === 'actual' ? setLogDraft({ start: addMinutes(now, -60), end: now }) : newBlockNow())}
+        >
+          {mode === 'actual' ? '+ Log' : '+ Block'}
+        </button>
+      </div>
+
+      <div className="modebar">
+        <div className="seg" aria-label="What to show">
+          <button className={mode === 'plan' ? 'on' : ''} onClick={() => setMode('plan')}>Plan</button>
+          <button className={mode === 'both' ? 'on' : ''} onClick={() => setMode('both')}>Both</button>
+          <button className={mode === 'actual' ? 'on' : ''} onClick={() => setMode('actual')}>What happened</button>
+        </div>
+        {overlays.length > 0 && (
+          <button
+            className={'chipbtn dark' + (showFixed ? ' on' : '')}
+            onClick={() => {
+              setShowFixed(!showFixed)
+              try {
+                localStorage.setItem('tb-fixed', showFixed ? '0' : '1')
+              } catch {
+                /* ignore */
+              }
+            }}
+          >
+            Fixed schedule
+          </button>
+        )}
+        {mode === 'actual' && <span className="muted small">Drag on empty space to log something you did.</span>}
       </div>
 
       {single && (
@@ -461,6 +544,24 @@ export default function Week() {
                 }}
                 onClick={(e) => onColumnClick(e, day)}
               >
+                {showFixed &&
+                  overlays
+                    .filter((o) => o.days.includes((day.getDay() + 6) % 7))
+                    .map((o) => {
+                      const a = Math.max(o.startMin, hStart * 60)
+                      const b = Math.min(o.endMin, hEnd * 60)
+                      if (b <= a) return null
+                      return (
+                        <div
+                          key={o.id}
+                          className="fixed"
+                          style={{ top: (a - hStart * 60) * pxMin, height: (b - a) * pxMin, ['--c' as string]: o.color }}
+                        >
+                          <span>{o.title}</span>
+                        </div>
+                      )
+                    })}
+
                 {isSameDay(day, now) && now.getHours() >= hStart && now.getHours() < hEnd && (
                   <div className="nowline" style={{ top: top(now) }}>
                     <span>{format(now, 'h:mm')}</span>
@@ -477,7 +578,7 @@ export default function Week() {
                   return (
                     <div
                       key={b.id}
-                      className={'block' + (live ? ' dragging' : '') + (overlaps ? ' overlap' : '')}
+                      className={'block' + (live ? ' dragging' : '') + (overlaps ? ' overlap' : '') + (mode === 'actual' ? ' ghost' : '')}
                       title={overlaps ? 'Overlaps another block: do both' : undefined}
                       style={{
                         top: top(s),
@@ -514,7 +615,37 @@ export default function Week() {
                   )
                 })}
 
-                {daySessions.map((s) => {
+                {mode === 'actual' &&
+                  (() => {
+                    const { placed: sp, lanes: sl } = layoutSessions(day)
+                    return sp.map(({ x, lane }) => {
+                      const end = x.endedAt ?? now
+                      const label =
+                        tasks.find((t) => t.id === x.taskId)?.title ?? activityOf(x.activityId)?.name ?? 'Session'
+                      return (
+                        <div
+                          key={x.id}
+                          className={'block session' + (x.endedAt ? '' : ' live')}
+                          style={{
+                            top: top(x.startedAt),
+                            height: heightOf(x.startedAt, end),
+                            left: `${(lane / sl) * 100}%`,
+                            width: `calc(${100 / sl}% - 8px)`,
+                            background: activityOf(x.activityId)?.color ?? '#7a869a',
+                          }}
+                          onPointerDown={(ev) => ev.stopPropagation()}
+                          onClick={() => setEditSession(x)}
+                        >
+                          <div className="btitle">{label}</div>
+                          <div className="btime">
+                            {format(x.startedAt, 'h:mm')}–{x.endedAt ? format(end, 'h:mma').toLowerCase() : 'now'}
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()}
+
+                {mode === 'both' && daySessions.map((s) => {
                   const end = s.endedAt ?? now
                   return (
                     <div
@@ -566,6 +697,9 @@ export default function Week() {
         )
       })()}
 
+      {logDraft && <SessionModal initial={logDraft} onClose={() => setLogDraft(null)} />}
+      {editSession && <SessionModal session={editSession} onClose={() => setEditSession(null)} />}
+
       {draft && (
         <BlockEditor
           draft={draft}
@@ -586,6 +720,7 @@ export default function Week() {
             else await addItem(uid, 'blocks', data)
             setDraft(null)
           }}
+          onLogDone={draft.id && draft.startAt <= new Date() ? logBlockDone : undefined}
           onDelete={
             draft.id
               ? async () => {
@@ -605,12 +740,14 @@ function BlockEditor({
   onClose,
   onSave,
   onDelete,
+  onLogDone,
   defaultMinutes,
 }: {
   draft: Draft
   onClose: () => void
   onSave: (d: Draft) => void
   onDelete?: () => void
+  onLogDone?: (d: Draft) => void
   defaultMinutes: (activityId: string | null, taskId: string | null) => number
 }) {
   const { uid, activities, tasks } = useData()
@@ -752,6 +889,11 @@ function BlockEditor({
           <button className="primary" disabled={!valid}>
             Save
           </button>
+          {onLogDone && (
+            <button type="button" onClick={() => onLogDone(d)} title="Record this block as something you actually did">
+              Log as done
+            </button>
+          )}
           {onDelete && (
             <button type="button" className="danger" onClick={onDelete}>
               Delete

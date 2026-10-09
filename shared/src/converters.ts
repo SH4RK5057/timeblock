@@ -1,4 +1,4 @@
-import type { Activity, Block, Context, Session, Settings, Task } from './types'
+import type { Activity, Block, Context, Overlay, Session, Settings, Task } from './types'
 import { DEFAULT_SETTINGS } from './types'
 
 type Raw = Record<string, any>
@@ -44,6 +44,7 @@ export const fromTask = (id: string, d: Raw): Task => {
     locationIds: r.locationIds ?? null,
     materialIds: r.materialIds ?? null,
     doneAt: r.doneAt ?? null,
+    repeat: r.repeat ?? 'none',
   }
 }
 
@@ -81,4 +82,13 @@ export const fromSettings = (d: Raw | undefined): Settings => ({
   ...(d ?? {}),
   notify: { ...DEFAULT_SETTINGS.notify, ...(d?.notify ?? {}) },
   autoClean: { ...DEFAULT_SETTINGS.autoClean, ...(d?.autoClean ?? {}) },
+})
+
+export const fromOverlay = (id: string, d: Raw): Overlay => ({
+  id,
+  title: d.title ?? '',
+  color: d.color ?? '#7a869a',
+  days: d.days ?? [],
+  startMin: d.startMin ?? 540,
+  endMin: d.endMin ?? 600,
 })

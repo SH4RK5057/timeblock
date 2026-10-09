@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import Modal from '../components/Modal'
-import { dueFromDate, taskGroup, type Task, type TaskGroup } from '@timeblock/shared'
+import { dueFromDate, nextDue, taskGroup, type Repeat, type Task, type TaskGroup } from '@timeblock/shared'
 import { useData } from '../data'
 import { addItem, patchItem, removeItem } from '../actions'
 
@@ -22,6 +22,7 @@ export default function Todo() {
   const [time, setTime] = useState('')
   const [activityId, setActivityId] = useState('')
   const [estimate, setEstimate] = useState('')
+  const [repeat, setRepeat] = useState<Repeat>('none')
   const [showDone, setShowDone] = useState(false)
   const [more, setMore] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
@@ -30,8 +31,9 @@ export default function Todo() {
     e.preventDefault()
     if (!title.trim()) return
     let dueAt: Date | null = null
-    if (date) {
-      const day = new Date(date + 'T00:00')
+    const dueDate = date || (repeat !== 'none' ? format(new Date(), 'yyyy-MM-dd') : '')
+    if (dueDate) {
+      const day = new Date(dueDate + 'T00:00')
       if (time) {
         const [h, m] = time.split(':').map(Number)
         dueAt = new Date(day)
@@ -47,7 +49,9 @@ export default function Todo() {
       locationIds: null,
       materialIds: null,
       doneAt: null,
+      repeat,
     })
+    setRepeat('none')
     setTitle('')
     setDate('')
     setTime('')
@@ -64,12 +68,17 @@ export default function Todo() {
       <input
         type="checkbox"
         checked={!!t.doneAt}
-        onChange={(e) => patchItem(uid, 'tasks', t.id, { doneAt: e.target.checked ? new Date() : null })}
+        onChange={(e) =>
+          e.target.checked && t.repeat !== 'none'
+            ? patchItem(uid, 'tasks', t.id, { dueAt: nextDue(t.dueAt ?? new Date(), t.repeat) })
+            : patchItem(uid, 'tasks', t.id, { doneAt: e.target.checked ? new Date() : null })
+        }
       />
       <div className="grow">
         <div>{t.title}</div>
         <div className="muted small">
           {activities.find((a) => a.id === t.activityId)?.name}
+          {t.repeat !== 'none' && ` · ↻ ${t.repeat}`}
           {t.dueAt && ` · due ${format(t.dueAt, 'EEE MMM d, p')}`}
           {t.estimateMinutes ? ` · ${t.estimateMinutes}m` : ''}
         </div>
@@ -116,6 +125,11 @@ export default function Todo() {
           value={estimate}
           onChange={(e) => setEstimate(e.target.value)}
         />
+        <select value={repeat} onChange={(e) => setRepeat(e.target.value as Repeat)} title="Repeat">
+          <option value="none">Doesn't repeat</option>
+          <option value="daily">Repeats daily</option>
+          <option value="weekly">Repeats weekly</option>
+        </select>
         </div>}
       </form>
 
@@ -162,13 +176,15 @@ function TaskEditor({ task, onClose }: { task: Task; onClose: () => void }) {
   const [time, setTime] = useState(task.dueAt && format(task.dueAt, 'HH:mm') !== '23:59' ? format(task.dueAt, 'HH:mm') : '')
   const [activityId, setActivityId] = useState(task.activityId ?? '')
   const [estimate, setEstimate] = useState(task.estimateMinutes?.toString() ?? '')
+  const [repeat, setRepeat] = useState<Repeat>(task.repeat)
 
   const save = async (e: FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return
     let dueAt: Date | null = null
-    if (date) {
-      const day = new Date(date + 'T00:00')
+    const dueDate = date || (repeat !== 'none' ? format(new Date(), 'yyyy-MM-dd') : '')
+    if (dueDate) {
+      const day = new Date(dueDate + 'T00:00')
       if (time) {
         const [h, m] = time.split(':').map(Number)
         dueAt = new Date(day)
@@ -181,6 +197,7 @@ function TaskEditor({ task, onClose }: { task: Task; onClose: () => void }) {
       dueAt,
       activityId: activityId || null,
       estimateMinutes: estimate ? Number(estimate) : null,
+      repeat,
     })
     onClose()
   }
@@ -221,6 +238,14 @@ function TaskEditor({ task, onClose }: { task: Task; onClose: () => void }) {
             <input type="number" min={5} step={5} value={estimate} onChange={(e) => setEstimate(e.target.value)} />
           </label>
         </div>
+        <label>
+          Repeat
+          <select value={repeat} onChange={(e) => setRepeat(e.target.value as Repeat)} title="Repeat">
+          <option value="none">Doesn't repeat</option>
+          <option value="daily">Repeats daily</option>
+          <option value="weekly">Repeats weekly</option>
+        </select>
+        </label>
         <label>
           Notes
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />

@@ -15,12 +15,14 @@ import {
   fromActivity,
   fromBlock,
   fromContext,
+  fromOverlay,
   fromSession,
   fromSettings,
   fromTask,
   type Activity,
   type Block,
   type Context,
+  type Overlay,
   type Session,
   type Settings,
   type Task,
@@ -36,6 +38,7 @@ export interface Data {
   tasks: Task[]
   blocks: Block[]
   sessions: Session[]
+  overlays: Overlay[]
   settings: Settings
 }
 
@@ -69,6 +72,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [blocks, c4] = useSub(`${base}/blocks`, fromBlock, (c) => query(c, where('endAt', '>=', since)))
   const [sessions, c5] = useSub(`${base}/sessions`, fromSession, (c) => query(c, where('startedAt', '>=', since)))
 
+  const [overlays, c7] = useSub(`${base}/overlays`, fromOverlay)
+
   const [settings, setSettings] = useState<Settings>(fromSettings(undefined))
   const [c6, setC6] = useState(false)
   useEffect(
@@ -82,12 +87,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const value: Data = {
     uid,
-    ready: c1 && c2 && c3 && c4 && c5 && c6,
+    ready: c1 && c2 && c3 && c4 && c5 && c6 && c7,
     contexts,
     activities,
     tasks,
     blocks,
     sessions,
+    overlays,
     settings,
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

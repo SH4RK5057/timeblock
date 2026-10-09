@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { usuallyTakes, type Activity, type Context, type ContextKind } from '@timeblock/shared'
+import { usuallyTakes, type Activity, type Context, type ContextKind, type Overlay } from '@timeblock/shared'
 import { useData } from '../data'
 import { useAuth } from '../auth'
 import { notificationsSupported, requestPermission, showNotification, startAlarmSound, stopAlarmSound, unlockAudio } from '../alerts'
-import { addItem, patchItem, pruneHistory, saveSettings } from '../actions'
+import { addItem, patchItem, pruneHistory, removeItem, saveSettings } from '../actions'
 import { splitList } from '../util'
 import Modal from '../components/Modal'
 import { archiveCount, exportArchive, requestPersistence } from '../archive'
@@ -83,8 +83,78 @@ function ActivityForm({ initial, onDone }: { initial?: Activity; onDone: () => v
   )
 }
 
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const toTime = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
+const fromTime = (t: string) => {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** A fixed weekly commitment (class, shift) shown behind the planner. It is not an activity. */
+function OverlayForm({ initial, onDone }: { initial?: Overlay; onDone: () => void }) {
+  const { uid } = useData()
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [color, setColor] = useState(initial?.color ?? '#7a869a')
+  const [days, setDays] = useState<number[]>(initial?.days ?? [0, 1, 2, 3, 4])
+  const [start, setStart] = useState(toTime(initial?.startMin ?? 540))
+  const [end, setEnd] = useState(toTime(initial?.endMin ?? 600))
+  const ok = title.trim() && days.length && fromTime(end) > fromTime(start)
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!ok) return
+    const data = { title: title.trim(), color, days, startMin: fromTime(start), endMin: fromTime(end) }
+    if (initial) await patchItem(uid, 'overlays', initial.id, data)
+    else await addItem(uid, 'overlays', data)
+    onDone()
+  }
+
+  return (
+    <form className="form" onSubmit={submit}>
+      <label>
+        Name
+        <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Calculus class" />
+      </label>
+      <div>
+        <div className="label">Repeats every</div>
+        <div className="chips">
+          {DAY_NAMES.map((n, i) => (
+            <label key={n} className={'chip' + (days.includes(i) ? ' on' : '')}>
+              <input
+                type="checkbox"
+                checked={days.includes(i)}
+                onChange={() => setDays(days.includes(i) ? days.filter((d) => d !== i) : [...days, i].sort())}
+              />
+              {n}
+            </label>
+          ))}
+        </div>
+      </div>
+      <div className="row">
+        <label>
+          From
+          <input type="time" value={start} onChange={(e) => setStart(e.target.value)} required />
+        </label>
+        <label>
+          To
+          <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} required />
+        </label>
+        <label>
+          Color
+          <input type="color" value={color} onChange={(e) => setColor(e.target.value)} />
+        </label>
+      </div>
+      {!(fromTime(end) > fromTime(start)) && <p className="overdue small">End must be after start.</p>}
+      <button className="primary" disabled={!ok}>
+        Save
+      </button>
+    </form>
+  )
+}
+
 export default function Library() {
-  const { uid, activities, contexts, settings, sessions, blocks } = useData()
+  const { uid, activities, contexts, settings, sessions, blocks, overlays } = useData()
+  const [editingOverlay, setEditingOverlay] = useState<Overlay | 'new' | null>(null)
   const [archived, setArchived] = useState<number | null>(null)
   useEffect(() => {
     archiveCount(uid).then(setArchived)
@@ -146,6 +216,33 @@ export default function Library() {
             </li>
           ))}
           {!activities.length && <li className="muted">No activities yet.</li>}
+        </ul>
+      </section>
+
+      <section>
+        <h3>
+          Fixed schedule <button className="link" onClick={() => setEditingOverlay('new')}>+ New</button>
+        </h3>
+        <p className="muted small">
+          Weekly commitments like classes or work. They show as a shaded background in the planner and don't count as
+          activities, so they stay out of Review.
+        </p>
+        <ul className="list">
+          {overlays.filter((o) => match(o.title)).map((o) => (
+            <li key={o.id}>
+              <span className="dot" style={{ background: o.color }} />
+              <span className="grow">
+                {o.title}
+                <span className="muted small">
+                  {' '}
+                  · {o.days.map((d) => DAY_NAMES[d]).join(' ')} {toTime(o.startMin)}–{toTime(o.endMin)}
+                </span>
+              </span>
+              <button className="link" onClick={() => setEditingOverlay(o)}>Edit</button>
+              <button className="link" aria-label="Delete" onClick={() => removeItem(uid, 'overlays', o.id)}>✕</button>
+            </li>
+          ))}
+          {!overlays.length && <li className="muted">Nothing yet.</li>}
         </ul>
       </section>
 
@@ -341,6 +438,11 @@ export default function Library() {
         <button className="danger" onClick={() => signOut()}>Sign out</button>
       </section>
 
+      {editingOverlay && (
+        <Modal title={editingOverlay === 'new' ? 'New fixed schedule item' : 'Edit fixed schedule item'} onClose={() => setEditingOverlay(null)}>
+          <OverlayForm initial={editingOverlay === 'new' ? undefined : editingOverlay} onDone={() => setEditingOverlay(null)} />
+        </Modal>
+      )}
       {editing && (
         <Modal title={editing === 'new' ? 'New activity' : 'Edit activity'} onClose={() => setEditing(null)}>
           <ActivityForm initial={editing === 'new' ? undefined : editing} onDone={() => setEditing(null)} />

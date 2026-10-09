@@ -24,6 +24,14 @@ export function dueFromDate(day: Date): Date {
   return d
 }
 
+/** Next occurrence of a repeating task, always strictly after both its current due date and now. */
+export function nextDue(due: Date, repeat: 'daily' | 'weekly', now: Date = new Date()): Date {
+  const step = repeat === 'weekly' ? 7 : 1
+  let d = addDays(due, step)
+  while (d <= now) d = addDays(d, step)
+  return d
+}
+
 export type TaskGroup = 'overdue' | 'today' | 'week' | 'later' | 'none'
 
 export function taskGroup(dueAt: Date | null, now: Date = new Date()): TaskGroup {
