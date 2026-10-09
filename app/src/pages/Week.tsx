@@ -1,14 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { addDays, addMinutes, differenceInCalendarDays, format, isSameDay, startOfDay } from 'date-fns'
+import { addDays, addMinutes, format, isSameDay, startOfDay } from 'date-fns'
 import { writeBatch, doc, collection } from 'firebase/firestore'
-import { type AlertMode, minutesBetween, snapToSlot, usuallyTakes, SLOT_MINUTES, weekStart, type Block, type Session } from '@timeblock/shared'
+import { type AlertMode, formatDuration, minutesBetween, snapToSlot, usuallyTakes, SLOT_MINUTES, weekStart, type Block, type Session } from '@timeblock/shared'
 import { useData } from '../data'
 import { addItem, logSession, patchItem, removeItem } from '../actions'
 import { db } from '../firebase'
-import { blockName, parseTime, splitList } from '../util'
-
-const minutesOnDay = (day: Date, mins: number) => addMinutes(startOfDay(day), mins)
+import { blockName, fromLocalInput, splitList, toLocalInput } from '../util'
 import Modal from '../components/Modal'
 import SessionModal from '../components/SessionModal'
 
@@ -761,9 +759,6 @@ function BlockEditor({
   const { uid, activities, tasks } = useData()
   const [d, setD] = useState(draft)
   const [creating, setCreating] = useState(false)
-  const [lenText, setLenText] = useState<string | null>(null)
-  const [startText, setStartText] = useState<string | null>(null)
-  const [endText, setEndText] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#4f7cff')
 
@@ -798,7 +793,11 @@ function BlockEditor({
   const valid = d.endAt > d.startAt && (d.activityId || d.taskId || d.title.trim())
 
   return (
-    <Modal title={isNew ? 'New block' : 'Edit block'} onClose={onClose}>
+    <Modal
+      title={isNew ? 'New block' : 'Edit block'}
+      onClose={onClose}
+      side={isNew ? <DayPreview start={d.startAt} end={d.endAt} id={d.id} /> : undefined}
+    >
       <form
         className="form"
         onSubmit={(e) => {
@@ -860,92 +859,24 @@ function BlockEditor({
         </label>
         <div className="row">
           <label>
-            Date
-            <input
-              type="date"
-              value={format(d.startAt, 'yyyy-MM-dd')}
-              onChange={(e) => {
-                if (!e.target.value) return
-                const n = differenceInCalendarDays(new Date(e.target.value + 'T00:00'), d.startAt)
-                set({ startAt: addDays(d.startAt, n), endAt: addDays(d.endAt, n) })
-              }}
-            />
-          </label>
-          <label>
             Start
             <input
-              inputMode="text"
-              placeholder="3:30pm"
-              value={startText ?? format(d.startAt, 'h:mm a')}
-              onFocus={(e) => e.target.select()}
-              onChange={(e) => {
-                setStartText(e.target.value)
-                const t = parseTime(e.target.value)
-                if (!t) return
-                // sliding the start keeps the length, so the whole block moves
-                const start = minutesOnDay(d.startAt, t.minutes)
-                set({ startAt: start, endAt: new Date(start.getTime() + (d.endAt.getTime() - d.startAt.getTime())) })
-              }}
-              onBlur={() => setStartText(null)}
+              type="datetime-local"
+              step={900}
+              value={toLocalInput(d.startAt)}
+              onChange={(e) => e.target.value && set({ startAt: fromLocalInput(e.target.value) })}
             />
           </label>
           <label>
             End
             <input
-              inputMode="text"
-              placeholder="4:30pm"
-              value={endText ?? format(d.endAt, 'h:mm a')}
-              onFocus={(e) => e.target.select()}
-              onChange={(e) => {
-                setEndText(e.target.value)
-                const t = parseTime(e.target.value)
-                if (!t) return
-                let end = minutesOnDay(d.startAt, t.minutes)
-                // "1" after a 9am start means 1pm unless am/pm was typed
-                if (end <= d.startAt && !t.hasMeridiem) end = minutesOnDay(d.startAt, t.minutes + 12 * 60)
-                set({ endAt: end })
-              }}
-              onBlur={() => setEndText(null)}
+              type="datetime-local"
+              step={900}
+              value={toLocalInput(d.endAt)}
+              onChange={(e) => e.target.value && set({ endAt: fromLocalInput(e.target.value) })}
             />
           </label>
         </div>
-        <div className="lenrow">
-          <label>
-            Length (minutes)
-            <input
-              type="number"
-              inputMode="numeric"
-              min={5}
-              step={5}
-              value={lenText ?? String(Math.max(0, minutesBetween(d.startAt, d.endAt)))}
-              onChange={(e) => {
-                setLenText(e.target.value)
-                const n = Math.round(Number(e.target.value))
-                if (n >= 1) set({ endAt: addMinutes(d.startAt, n) })
-              }}
-              onBlur={() => setLenText(null)}
-            />
-          </label>
-          {[15, 30, 45, 60, 90].map((m) => (
-            <button
-              type="button"
-              key={m}
-              className={'chipbtn dark' + (minutesBetween(d.startAt, d.endAt) === m ? ' on' : '')}
-              onClick={() => {
-                setLenText(null)
-                set({ endAt: addMinutes(d.startAt, m) })
-              }}
-            >
-              {m}m
-            </button>
-          ))}
-        </div>
-        <DayMini
-          start={d.startAt}
-          end={d.endAt}
-          id={d.id}
-          onPick={(start) => set({ startAt: start, endAt: new Date(start.getTime() + (d.endAt.getTime() - d.startAt.getTime())) })}
-        />
         <label>
           Details
           <textarea value={d.details} onChange={(e) => set({ details: e.target.value })} />
@@ -984,62 +915,72 @@ function BlockEditor({
   )
 }
 
-/** A strip of the day showing what's already planned and where this block lands. Click it to move the block. */
-function DayMini({ start, end, id, onPick }: { start: Date; end: Date; id: string | null; onPick: (s: Date) => void }) {
-  const { blocks, overlays, activities, settings } = useData()
+/** Live, read-only preview of the day beside the editor: what's already planned and where this block lands. */
+function DayPreview({ start, end, id }: { start: Date; end: Date; id: string | null }) {
+  const { blocks, overlays, activities, tasks, settings } = useData()
   const day = startOfDay(start)
-  const h0 = Math.min(settings.visibleHours.start, start.getHours())
-  const h1 = Math.max(settings.visibleHours.end, Math.ceil((end.getHours() * 60 + end.getMinutes()) / 60) || 24)
-  const span = (h1 - h0) * 60
-  const pct = (d: Date) => ((d.getHours() * 60 + d.getMinutes() - h0 * 60) / span) * 100
+  const startMin = start.getHours() * 60 + start.getMinutes()
+  const endMin = isSameDay(end, start) ? end.getHours() * 60 + end.getMinutes() : 24 * 60
+  const h0 = Math.min(settings.visibleHours.start, Math.floor(startMin / 60))
+  const h1 = Math.max(settings.visibleHours.end, Math.ceil(endMin / 60))
+  const PX = 22 // pixels per hour
+  const y = (mins: number) => ((mins - h0 * 60) / 60) * PX
+  const mins = (d: Date) => d.getHours() * 60 + d.getMinutes()
   const dow = (day.getDay() + 6) % 7
   const others = blocks.filter((b) => b.id !== id && isSameDay(b.startAt, day))
   const now = new Date()
-  const ticks = Array.from({ length: Math.floor((h1 - h0) / 3) + 1 }, (_, i) => h0 + i * 3).filter((h) => h <= h1)
-  const clip = (a: number, b: number) => ({ left: `${Math.max(0, a)}%`, width: `${Math.max(0.6, Math.min(100, b) - Math.max(0, a))}%` })
+  const hours = Array.from({ length: h1 - h0 }, (_, i) => h0 + i)
+  const bad = end <= start
 
   return (
-    <div className="daymini">
-      <div className="small muted">
-        {format(start, 'EEEE, MMM d')} · {format(start, 'h:mm a')} – {format(end, 'h:mm a')} · tap the strip to move it
+    <div className="preview">
+      <div className="pvhead">
+        <b>{format(start, 'EEE, MMM d')}</b>
+        <div className={bad ? 'overdue' : ''}>
+          {format(start, 'h:mm a')} – {format(end, 'h:mm a')}
+          {!bad && <span className="muted"> · {formatDuration(minutesBetween(start, end))}</span>}
+        </div>
       </div>
-      <div
-        className="dmbar"
-        onClick={(e) => {
-          const r = e.currentTarget.getBoundingClientRect()
-          const mins = h0 * 60 + ((e.clientX - r.left) / r.width) * span
-          onPick(snapToSlot(addMinutes(day, mins), 'floor'))
-        }}
-      >
-        {overlays.flatMap((o) =>
-          o.slots
-            .filter((sl) => sl.day === dow)
-            .map((sl) => (
-              <div
-                key={o.id + sl.day}
-                className="dmfixed"
-                title={o.title}
-                style={{ ...clip(((sl.startMin - h0 * 60) / span) * 100, ((sl.endMin - h0 * 60) / span) * 100), ['--c' as string]: o.color }}
-              />
-            )),
-        )}
-        {others.map((b) => (
-          <div
-            key={b.id}
-            className="dmblock"
-            title={`${format(b.startAt, 'h:mm')}–${format(b.endAt, 'h:mma')}`}
-            style={{ ...clip(pct(b.startAt), pct(b.endAt)), background: activities.find((a) => a.id === b.activityId)?.color ?? '#7a869a' }}
-          />
-        ))}
-        {isSameDay(now, day) && <div className="dmnow" style={{ left: `${pct(now)}%` }} />}
-        <div className="dmnew" style={clip(pct(start), pct(end))} />
-      </div>
-      <div className="dmticks">
-        {ticks.map((h) => (
-          <span key={h} style={{ left: `${((h - h0) / (h1 - h0)) * 100}%` }}>
-            {format(new Date(2000, 0, 1, h % 24), 'ha').toLowerCase()}
-          </span>
-        ))}
+      <div className="pvscroll">
+        <div className="pvgrid" style={{ height: (h1 - h0) * PX }}>
+          {hours.map((h) => (
+            <div key={h} className="pvhour" style={{ top: (h - h0) * PX, height: PX }}>
+              <span>{format(new Date(2000, 0, 1, h), 'ha').toLowerCase()}</span>
+            </div>
+          ))}
+          {overlays.flatMap((o) =>
+            o.slots
+              .filter((sl) => sl.day === dow)
+              .map((sl) => (
+                <div
+                  key={o.id + sl.day}
+                  className="pvfixed"
+                  style={{ top: y(sl.startMin), height: ((sl.endMin - sl.startMin) / 60) * PX, ['--c' as string]: o.color }}
+                >
+                  <span>{o.title}</span>
+                </div>
+              )),
+          )}
+          {others.map((b) => (
+            <div
+              key={b.id}
+              className="pvblock"
+              style={{
+                top: y(mins(b.startAt)),
+                height: Math.max(8, minutesBetween(b.startAt, b.endAt) * (PX / 60)),
+                background: activities.find((a) => a.id === b.activityId)?.color ?? '#7a869a',
+              }}
+            >
+              <span>{blockName(b, activities, tasks)}</span>
+            </div>
+          ))}
+          {isSameDay(now, day) && <div className="pvnow" style={{ top: y(mins(now)) }} />}
+          {!bad && (
+            <div className="pvnew" style={{ top: y(startMin), height: Math.max(6, (endMin - startMin) * (PX / 60)) }}>
+              <span>This block</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

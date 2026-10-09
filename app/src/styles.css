@@ -248,15 +248,25 @@ button.link.left { justify-self: start; }
 .block.tiny .btime { display: none; }
 .block.tiny .resize { height: 4px; }
 
-/* where this block lands in the day */
-.daymini { display: grid; gap: 4px; }
-.dmbar { position: relative; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); overflow: hidden; cursor: pointer; }
-.dmblock { position: absolute; top: 4px; bottom: 4px; border-radius: 3px; opacity: .55; }
-.dmfixed { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--c) 25%, transparent); }
-.dmnew { position: absolute; top: 1px; bottom: 1px; border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 5px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
-.dmnow { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--danger); }
-.dmticks { position: relative; height: 14px; font-size: 10px; color: var(--muted); }
-.dmticks span { position: absolute; transform: translateX(-50%); }
 
-.lenrow { display: flex; gap: 6px; align-items: end; flex-wrap: wrap; }
-.lenrow label { width: 150px; }
+
+/* editor with a live day preview beside it */
+.modal.wide { width: min(820px, 100%); }
+.modalcols { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 16px; align-items: start; }
+.modalside { position: sticky; top: 0; }
+@media (max-width: 720px) { .modalcols { grid-template-columns: 1fr; } .modalside { order: -1; position: static; } }
+.pvhead { display: grid; gap: 2px; margin-bottom: 6px; font-size: 14px; }
+.pvscroll { max-height: min(60vh, 460px); overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.pvgrid { position: relative; margin-left: 38px; }
+.pvhour { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+.pvhour span { position: absolute; left: -36px; top: -7px; font-size: 10px; color: var(--muted); }
+.pvfixed { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--c) 20%, transparent); border-left: 3px solid var(--c); overflow: hidden; }
+.pvfixed span { font-size: 10px; color: var(--muted); padding-left: 4px; }
+.pvblock { position: absolute; left: 4px; right: 4px; border-radius: 4px; opacity: .6; overflow: hidden; color: #fff; font-size: 10px; padding: 0 4px; }
+.pvblock span, .pvnew span { white-space: nowrap; }
+.pvnow { position: absolute; left: 0; right: 0; border-top: 2px solid var(--danger); z-index: 3; }
+.pvnew {
+  position: absolute; left: 14px; right: 0; z-index: 2; border: 2px solid var(--accent); border-radius: 5px; padding: 0 4px;
+  background: color-mix(in srgb, var(--accent) 35%, transparent); font-size: 11px; font-weight: 600; overflow: hidden;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); transition: top .12s, height .12s;
+}
