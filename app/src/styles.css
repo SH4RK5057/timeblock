@@ -230,3 +230,8 @@ button.link.left { justify-self: start; }
 .block.ghost { background: transparent !important; border: 2px dashed var(--muted); color: var(--muted); pointer-events: none; box-shadow: none; opacity: .7; }
 .block.session { cursor: pointer; }
 .block.session.live { border: 2px solid #fff; }
+
+.dayrows { display: grid; gap: 6px; }
+.dayrow { display: flex; align-items: center; gap: 8px; }
+.dayrow .chip { width: 58px; text-align: center; justify-content: center; }
+.colorpick input { width: 44px; padding: 2px; }

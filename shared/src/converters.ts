@@ -88,7 +88,8 @@ export const fromOverlay = (id: string, d: Raw): Overlay => ({
   id,
   title: d.title ?? '',
   color: d.color ?? '#7a869a',
-  days: d.days ?? [],
-  startMin: d.startMin ?? 540,
-  endMin: d.endMin ?? 600,
+  // Older items stored one time range for several days; read them as per-day slots.
+  slots:
+    d.slots ??
+    (d.days ?? []).map((day: number) => ({ day, startMin: d.startMin ?? 540, endMin: d.endMin ?? 600 })),
 })

@@ -90,20 +90,42 @@ const fromTime = (t: string) => {
   return h * 60 + m
 }
 
-/** A fixed weekly commitment (class, shift) shown behind the planner. It is not an activity. */
+/** A fixed weekly commitment (class, shift) shown behind the planner. Each day has its own times. */
 function OverlayForm({ initial, onDone }: { initial?: Overlay; onDone: () => void }) {
   const { uid } = useData()
   const [title, setTitle] = useState(initial?.title ?? '')
   const [color, setColor] = useState(initial?.color ?? '#7a869a')
-  const [days, setDays] = useState<number[]>(initial?.days ?? [0, 1, 2, 3, 4])
-  const [start, setStart] = useState(toTime(initial?.startMin ?? 540))
-  const [end, setEnd] = useState(toTime(initial?.endMin ?? 600))
-  const ok = title.trim() && days.length && fromTime(end) > fromTime(start)
+  const [times, setTimes] = useState<Record<number, { start: string; end: string }>>(() => {
+    const t: Record<number, { start: string; end: string }> = {}
+    for (const sl of initial?.slots ?? []) t[sl.day] = { start: toTime(sl.startMin), end: toTime(sl.endMin) }
+    if (!initial) for (const d of [0, 1, 2, 3, 4]) t[d] = { start: '09:00', end: '10:00' }
+    return t
+  })
+  const days = Object.keys(times).map(Number).sort()
+  const valid = (d: number) => fromTime(times[d].end) > fromTime(times[d].start)
+  const ok = title.trim() && days.length > 0 && days.every(valid)
+
+  const toggle = (d: number) =>
+    setTimes((t) => {
+      const next = { ...t }
+      if (d in next) delete next[d]
+      else {
+        const last = days.length ? t[days[days.length - 1]] : { start: '09:00', end: '10:00' }
+        next[d] = { ...last } // new days start with the same times as the previous one
+      }
+      return next
+    })
+  const setTime = (d: number, k: 'start' | 'end', v: string) => setTimes((t) => ({ ...t, [d]: { ...t[d], [k]: v } }))
+  const copyFirstToAll = () => setTimes((t) => Object.fromEntries(days.map((d) => [d, { ...t[days[0]] }])))
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (!ok) return
-    const data = { title: title.trim(), color, days, startMin: fromTime(start), endMin: fromTime(end) }
+    const data = {
+      title: title.trim(),
+      color,
+      slots: days.map((d) => ({ day: d, startMin: fromTime(times[d].start), endMin: fromTime(times[d].end) })),
+    }
     if (initial) await patchItem(uid, 'overlays', initial.id, data)
     else await addItem(uid, 'overlays', data)
     onDone()
@@ -111,40 +133,42 @@ function OverlayForm({ initial, onDone }: { initial?: Overlay; onDone: () => voi
 
   return (
     <form className="form" onSubmit={submit}>
-      <label>
-        Name
-        <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Calculus class" />
-      </label>
-      <div>
-        <div className="label">Repeats every</div>
-        <div className="chips">
-          {DAY_NAMES.map((n, i) => (
-            <label key={n} className={'chip' + (days.includes(i) ? ' on' : '')}>
-              <input
-                type="checkbox"
-                checked={days.includes(i)}
-                onChange={() => setDays(days.includes(i) ? days.filter((d) => d !== i) : [...days, i].sort())}
-              />
-              {n}
-            </label>
-          ))}
-        </div>
-      </div>
       <div className="row">
         <label>
-          From
-          <input type="time" value={start} onChange={(e) => setStart(e.target.value)} required />
+          Name
+          <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Calculus class" />
         </label>
-        <label>
-          To
-          <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} required />
-        </label>
-        <label>
+        <label className="colorpick">
           Color
           <input type="color" value={color} onChange={(e) => setColor(e.target.value)} />
         </label>
       </div>
-      {!(fromTime(end) > fromTime(start)) && <p className="overdue small">End must be after start.</p>}
+      <div className="label">Days and times (each day can differ)</div>
+      <div className="dayrows">
+        {DAY_NAMES.map((n, i) => (
+          <div key={n} className="dayrow">
+            <label className={'chip' + (i in times ? ' on' : '')}>
+              <input type="checkbox" checked={i in times} onChange={() => toggle(i)} />
+              {n}
+            </label>
+            {i in times ? (
+              <>
+                <input type="time" value={times[i].start} onChange={(e) => setTime(i, 'start', e.target.value)} required />
+                <span className="muted">to</span>
+                <input type="time" value={times[i].end} onChange={(e) => setTime(i, 'end', e.target.value)} required />
+                {!valid(i) && <span className="overdue small">end after start</span>}
+              </>
+            ) : (
+              <span className="muted small">off</span>
+            )}
+          </div>
+        ))}
+      </div>
+      {days.length > 1 && (
+        <button type="button" className="link left" onClick={copyFirstToAll}>
+          Use {DAY_NAMES[days[0]]}'s times for every selected day
+        </button>
+      )}
       <button className="primary" disabled={!ok}>
         Save
       </button>
@@ -235,7 +259,7 @@ export default function Library() {
                 {o.title}
                 <span className="muted small">
                   {' '}
-                  · {o.days.map((d) => DAY_NAMES[d]).join(' ')} {toTime(o.startMin)}–{toTime(o.endMin)}
+                  · {o.slots.map((sl) => `${DAY_NAMES[sl.day]} ${toTime(sl.startMin)}–${toTime(sl.endMin)}`).join(', ')}
                 </span>
               </span>
               <button className="link" onClick={() => setEditingOverlay(o)}>Edit</button>

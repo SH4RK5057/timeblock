@@ -93,8 +93,12 @@ export interface Overlay {
   id: string
   title: string
   color: string
-  /** 0 = Monday ... 6 = Sunday */
-  days: number[]
+  /** Each weekday can have its own times. day: 0 = Monday ... 6 = Sunday */
+  slots: OverlaySlot[]
+}
+
+export interface OverlaySlot {
+  day: number
   startMin: number
   endMin: number
 }

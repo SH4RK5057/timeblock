@@ -545,22 +545,24 @@ export default function Week() {
                 onClick={(e) => onColumnClick(e, day)}
               >
                 {showFixed &&
-                  overlays
-                    .filter((o) => o.days.includes((day.getDay() + 6) % 7))
-                    .map((o) => {
-                      const a = Math.max(o.startMin, hStart * 60)
-                      const b = Math.min(o.endMin, hEnd * 60)
-                      if (b <= a) return null
-                      return (
-                        <div
-                          key={o.id}
-                          className="fixed"
-                          style={{ top: (a - hStart * 60) * pxMin, height: (b - a) * pxMin, ['--c' as string]: o.color }}
-                        >
-                          <span>{o.title}</span>
-                        </div>
-                      )
-                    })}
+                  overlays.flatMap((o) =>
+                    o.slots
+                      .filter((sl) => sl.day === (day.getDay() + 6) % 7)
+                      .map((sl) => {
+                        const a = Math.max(sl.startMin, hStart * 60)
+                        const b = Math.min(sl.endMin, hEnd * 60)
+                        if (b <= a) return null
+                        return (
+                          <div
+                            key={o.id + sl.day}
+                            className="fixed"
+                            style={{ top: (a - hStart * 60) * pxMin, height: (b - a) * pxMin, ['--c' as string]: o.color }}
+                          >
+                            <span>{o.title}</span>
+                          </div>
+                        )
+                      }),
+                  )}
 
                 {isSameDay(day, now) && now.getHours() >= hStart && now.getHours() < hEnd && (
                   <div className="nowline" style={{ top: top(now) }}>
